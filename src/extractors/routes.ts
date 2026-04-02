@@ -1,6 +1,8 @@
-import { readFileSync } from 'node:fs';
 import type { ExtractedRoute, SupportedLanguage, DetectedFramework } from '../types.ts';
 import { extractTsRoutes } from '../queries/typescript.ts';
+import { extractPyRoutes } from '../queries/python.ts';
+import { extractGoRoutes } from '../queries/go.ts';
+import { extractJavaRoutes } from '../queries/java.ts';
 
 const AUTH_PATTERNS = [
   'auth', 'authenticate', 'requireAuth', 'isAuthenticated',
@@ -16,16 +18,22 @@ export async function extractRoutes(
 ): Promise<ExtractedRoute[]> {
   // File-based routing (Next.js, Astro)
   if (isFileBasedRouteFile(filePath, framework)) {
-    return extractFileBasedRoutes(tree, language, filePath, framework);
+    return extractFileBasedRoutes(tree, filePath, framework);
   }
 
-  // Code-based routing (Express, Fastify)
+  // Code-based routing
   switch (language) {
     case 'typescript':
     case 'javascript':
     case 'tsx':
     case 'jsx':
       return extractTsRoutes(tree, language, filePath);
+    case 'python':
+      return extractPyRoutes(tree, language, filePath);
+    case 'go':
+      return extractGoRoutes(tree, language, filePath);
+    case 'java':
+      return extractJavaRoutes(tree, language, filePath);
     default:
       return [];
   }
@@ -41,17 +49,13 @@ function isFileBasedRouteFile(filePath: string, framework: DetectedFramework): b
 
 function extractFileBasedRoutes(
   tree: any,
-  language: SupportedLanguage,
   filePath: string,
   framework: DetectedFramework,
 ): ExtractedRoute[] {
   const routes: ExtractedRoute[] = [];
 
   if (framework.id === 'nextjs-app' || framework.id === 'nextjs-both') {
-    // Derive route path from file path: app/api/users/[id]/route.ts → /api/users/:id
     const routePath = filePathToRoutePath(filePath);
-
-    // Read source to find exported HTTP methods
     let source: string;
     try {
       source = tree.rootNode.text;
@@ -82,13 +86,12 @@ function extractFileBasedRoutes(
 }
 
 function filePathToRoutePath(filePath: string): string {
-  // app/api/users/[id]/route.ts → /api/users/:id
   let route = filePath
     .replace(/^app\//, '/')
     .replace(/\/route\.\w+$/, '')
-    .replace(/\([\w-]+\)\//g, '') // Remove route groups: (group)/
-    .replace(/\[\.\.\.(\w+)\]/g, ':$1') // Catch-all: [...rest] → :rest
-    .replace(/\[(\w+)\]/g, ':$1'); // Dynamic: [id] → :id
+    .replace(/\([\w-]+\)\//g, '')
+    .replace(/\[\.\.\.(\w+)\]/g, ':$1')
+    .replace(/\[(\w+)\]/g, ':$1');
 
   if (!route.startsWith('/')) route = '/' + route;
   return route;
