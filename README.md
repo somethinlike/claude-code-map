@@ -87,4 +87,4 @@ Unlike regex-based tools, tree-sitter builds a real AST. It handles multi-line d
 
 ## License
 
-MIT
+CC0 1.0 — Public Domain. Do whatever you want with it.

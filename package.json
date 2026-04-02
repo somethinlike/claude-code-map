@@ -2,7 +2,7 @@
   "name": "claude-code-map",
   "version": "0.1.0",
   "type": "module",
-  "license": "MIT",
+  "license": "CC0-1.0",
   "description": "Pre-index your codebase so Claude Code skips the exploration phase. Tree-sitter AST extraction, static markdown output, delta-aware regeneration.",
   "bin": {
     "claude-code-map": "./bin/claude-code-map.js"

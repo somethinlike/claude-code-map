@@ -77,6 +77,9 @@ const EXPRESS_ROUTE_QUERY = `
     (string) @route_path))
 `;
 
+// TypeScript-only node types that don't exist in the JavaScript grammar
+const TS_ONLY = new Set(['typescript', 'tsx']);
+
 // --- Extraction Functions ---
 
 export async function extractTsExports(
@@ -85,6 +88,7 @@ export async function extractTsExports(
   filePath: string,
 ): Promise<ExtractedSymbol[]> {
   const symbols: ExtractedSymbol[] = [];
+  const isTs = TS_ONLY.has(language);
 
   // Functions
   const fnCaptures = await runQuery(language, tree, EXPORT_FUNCTION_QUERY);
@@ -105,71 +109,79 @@ export async function extractTsExports(
     }
   }
 
-  // Classes
-  const classCaptures = await runQuery(language, tree, EXPORT_CLASS_QUERY);
-  for (const cap of classCaptures) {
-    if (cap.name === 'class_name') {
-      symbols.push({
-        name: cap.text,
-        kind: 'class',
-        signature: `class ${cap.text}`,
-        filePath,
-        line: cap.startRow + 1,
-        isExported: true,
-        isDefault: false,
-        language,
-      });
+  // Classes (uses type_identifier — TS grammar only)
+  if (isTs) {
+    const classCaptures = await runQuery(language, tree, EXPORT_CLASS_QUERY);
+    for (const cap of classCaptures) {
+      if (cap.name === 'class_name') {
+        symbols.push({
+          name: cap.text,
+          kind: 'class',
+          signature: `class ${cap.text}`,
+          filePath,
+          line: cap.startRow + 1,
+          isExported: true,
+          isDefault: false,
+          language,
+        });
+      }
     }
   }
 
-  // Interfaces
-  const ifaceCaptures = await runQuery(language, tree, EXPORT_INTERFACE_QUERY);
-  for (const cap of ifaceCaptures) {
-    if (cap.name === 'iface_name') {
-      symbols.push({
-        name: cap.text,
-        kind: 'interface',
-        signature: `interface ${cap.text}`,
-        filePath,
-        line: cap.startRow + 1,
-        isExported: true,
-        isDefault: false,
-        language,
-      });
+  // Interfaces (TS only)
+  if (isTs) {
+    const ifaceCaptures = await runQuery(language, tree, EXPORT_INTERFACE_QUERY);
+    for (const cap of ifaceCaptures) {
+      if (cap.name === 'iface_name') {
+        symbols.push({
+          name: cap.text,
+          kind: 'interface',
+          signature: `interface ${cap.text}`,
+          filePath,
+          line: cap.startRow + 1,
+          isExported: true,
+          isDefault: false,
+          language,
+        });
+      }
     }
   }
 
-  // Type aliases
-  const typeCaptures = await runQuery(language, tree, EXPORT_TYPE_QUERY);
-  for (const cap of typeCaptures) {
-    if (cap.name === 'type_name') {
-      symbols.push({
-        name: cap.text,
-        kind: 'type',
-        signature: `type ${cap.text}`,
-        filePath,
-        line: cap.startRow + 1,
-        isExported: true,
-        isDefault: false,
-        language,
-      });
+  // Type aliases (TS only)
+  if (isTs) {
+    const typeCaptures = await runQuery(language, tree, EXPORT_TYPE_QUERY);
+    for (const cap of typeCaptures) {
+      if (cap.name === 'type_name') {
+        symbols.push({
+          name: cap.text,
+          kind: 'type',
+          signature: `type ${cap.text}`,
+          filePath,
+          line: cap.startRow + 1,
+          isExported: true,
+          isDefault: false,
+          language,
+        });
+      }
     }
   }
 
-  // Enums
-  const enumCaptures = await runQuery(language, tree, EXPORT_ENUM_QUERY);
-  for (const cap of enumCaptures) {
-    if (cap.name === 'enum_name') {
-      symbols.push({
-        name: cap.text,
-        kind: 'enum',
-        signature: `enum ${cap.text}`,
-        filePath,
-        line: cap.startRow + 1,
-        isExported: true,
-        isDefault: false,
-        language,
-      });
+  // Enums (TS only)
+  if (isTs) {
+    const enumCaptures = await runQuery(language, tree, EXPORT_ENUM_QUERY);
+    for (const cap of enumCaptures) {
+      if (cap.name === 'enum_name') {
+        symbols.push({
+          name: cap.text,
+          kind: 'enum',
+          signature: `enum ${cap.text}`,
+          filePath,
+          line: cap.startRow + 1,
+          isExported: true,
+          isDefault: false,
+          language,
+        });
+      }
     }
   }
 
@@ -199,6 +211,9 @@ export async function extractTsTypes(
   filePath: string,
 ): Promise<ExtractedType[]> {
   const types: ExtractedType[] = [];
+  const isTs = TS_ONLY.has(language);
+
+  if (!isTs) return types; // JS has no interfaces, type aliases, or enums
 
   // Interfaces
   const ifaceCaptures = await runQuery(language, tree, INTERFACE_QUERY);
