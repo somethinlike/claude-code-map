@@ -1,14 +1,15 @@
 {
   "name": "claude-code-map",
-  "version": "2026.04.02.0700",
+  "version": "0.1.0",
   "type": "module",
   "license": "MIT",
   "description": "Pre-index your codebase so Claude Code skips the exploration phase. Tree-sitter AST extraction, static markdown output, delta-aware regeneration.",
   "bin": {
-    "claude-code-map": "./src/cli.ts"
+    "claude-code-map": "./bin/claude-code-map.js"
   },
   "files": [
     "src/",
+    "bin/",
     "README.md",
     "LICENSE"
   ],
