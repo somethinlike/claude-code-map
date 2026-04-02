@@ -1,0 +1,47 @@
+{
+  "name": "claude-code-map",
+  "version": "2026.04.02.0700",
+  "type": "module",
+  "license": "MIT",
+  "description": "Pre-index your codebase so Claude Code skips the exploration phase. Tree-sitter AST extraction, static markdown output, delta-aware regeneration.",
+  "bin": {
+    "claude-code-map": "./src/cli.ts"
+  },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "map": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai",
+    "codebase",
+    "index",
+    "tree-sitter",
+    "codemap",
+    "tokens",
+    "context"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/somethinlike/claude-code-map.git"
+  },
+  "author": "Ryan Wills <somethinlike@gmail.com>",
+  "dependencies": {
+    "tsx": "^4.19.0",
+    "web-tree-sitter": "^0.25.0",
+    "tree-sitter-wasms": "^0.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  }
+}
