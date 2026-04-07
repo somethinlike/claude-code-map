@@ -1,5 +1,12 @@
 # claude-code-map — Roadmap & Implementation Plan
 
+## Origin
+
+Inspired by a lengthy r/ClaudeAI discussion where dozens of developers shared competing solutions to the same problem:
+https://old.reddit.com/r/ClaudeAI/comments/1sa2jbz/i_built_a_tool_that_saves_50k_tokens_per_claude/
+
+OP built `ai-codex` (regex-based, Node). Comments surfaced: Cymbal (SQLite + tree-sitter, Go), JCodeMunch (MCP server, tree-sitter), TheBrain (persistent memory), Pampa/PampaX, codanna, LeanCTX, grepai, codebase-memory-mcp, CLI-Task-System, Lumen, and more. Every tool had a different tradeoff — license, language support, runtime requirements, or output format. `claude-code-map` synthesizes the best ideas: tree-sitter AST (like Cymbal/JCodeMunch), static markdown output (like ai-codex), zero native deps via WASM, CC0 license, and npx-ready.
+
 ## Problem
 
 Claude Code spends 30-50K tokens at the start of every conversation exploring project structure (routes, exports, schema, types). This is repeated work — the same structural discovery every time. `claude-code-map` solves this by generating static markdown index files from tree-sitter AST parsing. One `npx claude-code-map` call, one line in CLAUDE.md, and every future conversation starts with the map already in hand.
