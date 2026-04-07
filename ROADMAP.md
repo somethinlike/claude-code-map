@@ -131,11 +131,11 @@ npx claude-code-map --help
 ### Cache (delta-aware regeneration)
 `.codemap/cache.json` stores `{path → {mtimeMs, size}}`. On subsequent runs, only changed files are re-parsed. `--force` bypasses cache. `.codemap/cache-data.json` stores extraction results per file.
 
-## V1.1 (Community-Driven Release) — In Progress
+## V1.1 (Community-Driven Release) — Complete
 
 Inspired by community feedback from the [origin thread](https://old.reddit.com/r/ClaudeAI/comments/1sa2jbz/). Features:
 
-- [x] **OEB Hardening**: 88+ vitest tests co-located with source (13 test files)
+- [x] **Quality Standard**: 88+ vitest tests co-located with source (13 test files)
 - [x] **Shared utils**: Extracted `truncate()` and `groupBy()` from 8 duplicated files
 - [x] **`--hook` flag**: Generates git pre-commit hook for auto-regeneration
 - [x] **`@symbol` lookup**: Search the index for symbols by name
@@ -143,11 +143,21 @@ Inspired by community feedback from the [origin thread](https://old.reddit.com/r
 - [x] **Java Spring route fix**: Extract actual annotation path, not handler name
 - [x] **C# modifier detection**: Check for `public` keyword instead of hardcoding `isExported: true`
 
-## V2 Scope (Future — Do Not Build Yet)
+## V1.2 (Language Expansion + Quality of Life) — Complete
+
+- [x] **PHP support**: Classes, interfaces, traits, enums (PHP 8.1+), functions, public methods, Laravel routes
+- [x] **Ruby support**: Classes, modules, methods, singleton methods, attr_accessor fields, Rails routes
+- [x] **Kotlin support**: Functions, classes, objects, interfaces, Spring Boot routes with class-level prefixes
+- [x] **`--stats` flag**: Shows index file sizes and estimated token counts
+- [x] **`--quiet` / `-q` flag**: Suppresses all output for git hooks and CI
+- [x] **Pre-commit hook fix**: Hook now uses `--quiet` and `|| true` to never block commits
+- [x] **109 tests** across 16 test files
+
+## V2 Scope (Future)
 
 - Watch mode (`--watch`) with file system watcher for real-time re-indexing
 - MCP server mode — native Claude tool integration, no Bash calls
-- More languages: Kotlin, Swift, PHP, Ruby, Elixir, Dart
+- More languages: Swift, Elixir, Dart, Lua
 - Monorepo support (scan multiple packages, per-package output)
 - Configurable language subset (don't download all WASM grammars)
 

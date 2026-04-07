@@ -19,6 +19,7 @@ import { formatSchema } from './formatters/schema-md.ts';
 import { formatTypes } from './formatters/types-md.ts';
 import { installHook } from './hook.ts';
 import { lookupSymbol } from './lookup.ts';
+import { getIndexStats, formatStats } from './stats.ts';
 import type { ParsedFile, ExtractedSymbol, ExtractedRoute, ExtractedType, ExtractedModel } from './types.ts';
 
 // --- Version ---
@@ -32,12 +33,13 @@ function getVersion(): string {
 // --- Argument Parsing ---
 
 interface CliArgs {
-  action: 'run' | 'help' | 'version' | 'hook' | 'lookup';
+  action: 'run' | 'help' | 'version' | 'hook' | 'lookup' | 'stats';
   output?: string;
   include: string[];
   exclude: string[];
   schema: string[];
   force: boolean;
+  quiet: boolean;
   symbolQuery?: string;
 }
 
@@ -49,6 +51,7 @@ export function parseArgs(argv: string[]): CliArgs {
     exclude: [],
     schema: [],
     force: false,
+    quiet: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -76,6 +79,13 @@ export function parseArgs(argv: string[]): CliArgs {
         break;
       case '--hook':
         result.action = 'hook';
+        break;
+      case '--stats':
+        result.action = 'stats';
+        break;
+      case '--quiet':
+      case '-q':
+        result.quiet = true;
         break;
       case '--schema':
         result.schema.push(args[++i]);
@@ -140,6 +150,8 @@ Options:
   --schema <path>     Schema file path (repeatable)
   --force             Ignore cache, re-parse everything
   --hook              Install pre-commit git hook for auto-regeneration
+  --stats             Show index file sizes and estimated token counts
+  --quiet, -q         Suppress all output (for git hooks / CI)
   --help, -h          Show this help
   --version, -v       Show version
 
@@ -149,6 +161,7 @@ Examples:
   npx claude-code-map --exclude "*.test.ts"
   npx claude-code-map --force                  # Full re-scan
   npx claude-code-map --hook                   # Install git hook
+  npx claude-code-map --stats                  # Show token estimate
   npx claude-code-map @parseArgs               # Look up symbol
 
 Output:
@@ -157,6 +170,10 @@ Output:
   .codemap/routes.md      HTTP routes with methods and auth
   .codemap/schema.md      Database schema (if detected)
   .codemap/types.md       Interfaces, enums, type aliases
+
+Languages:
+  TypeScript, JavaScript, TSX, JSX, Python, Go, Rust, Java, C#,
+  PHP, Ruby, Kotlin
 `);
 }
 
@@ -165,6 +182,9 @@ Output:
 async function main(): Promise<void> {
   const startTime = performance.now();
   const cliArgs = parseArgs(process.argv);
+
+  // Quiet mode: suppress all console.log output
+  const log = cliArgs.quiet ? (..._args: unknown[]) => {} : console.log.bind(console);
 
   if (cliArgs.action === 'help') {
     printHelp();
@@ -185,23 +205,33 @@ async function main(): Promise<void> {
   const config = loadConfig(projectRoot, cliArgs);
   const outputDir = resolve(projectRoot, config.output);
 
+  if (cliArgs.action === 'stats') {
+    const stats = getIndexStats(outputDir);
+    if (!stats) {
+      console.log('[codemap] No index found. Run `npx claude-code-map` first.');
+      return;
+    }
+    console.log(formatStats(stats));
+    return;
+  }
+
   if (cliArgs.action === 'lookup') {
     lookupSymbol(cliArgs.symbolQuery!, outputDir);
     return;
   }
 
   // Step 1: Detect framework
-  console.log('[codemap] Detecting framework...');
+  log('[codemap] Detecting framework...');
   const framework = await detectFramework(projectRoot);
-  console.log(`[codemap] Framework: ${framework.name}`);
+  log(`[codemap] Framework: ${framework.name}`);
 
   // Step 2: Scan files
-  console.log('[codemap] Scanning files...');
+  log('[codemap] Scanning files...');
   const files = await scanFiles(projectRoot, config);
-  console.log(`[codemap] Found ${files.length} source files`);
+  log(`[codemap] Found ${files.length} source files`);
 
   if (files.length === 0) {
-    console.log('[codemap] No supported source files found. Nothing to index.');
+    log('[codemap] No supported source files found. Nothing to index.');
     return;
   }
 
@@ -213,11 +243,11 @@ async function main(): Promise<void> {
     : getChangedFiles(files, cache);
 
   if (changed.length === 0 && !cliArgs.force) {
-    console.log('[codemap] All files unchanged. Use --force to re-scan.');
+    log('[codemap] All files unchanged. Use --force to re-scan.');
     return;
   }
 
-  console.log(`[codemap] Parsing ${changed.length} changed files (${unchanged.length} cached)...`);
+  log(`[codemap] Parsing ${changed.length} changed files (${unchanged.length} cached)...`);
 
   // Step 4: Initialize parser
   await initParser();
@@ -311,14 +341,14 @@ async function main(): Promise<void> {
   if (routesMd) outputFiles.push('routes.md');
   if (schemaMd) outputFiles.push('schema.md');
 
-  console.log(`\n[codemap] Done in ${elapsed}s`);
-  console.log(`[codemap] ${files.length} files → ${outputFiles.length} index files in ${config.output}/`);
-  console.log(`[codemap] ${allSymbols.length} exports, ${allRoutes.length} routes, ${allTypes.length} types, ${models.length} models`);
+  log(`\n[codemap] Done in ${elapsed}s`);
+  log(`[codemap] ${files.length} files → ${outputFiles.length} index files in ${config.output}/`);
+  log(`[codemap] ${allSymbols.length} exports, ${allRoutes.length} routes, ${allTypes.length} types, ${models.length} models`);
   if (parseErrors > 0) {
-    console.log(`[codemap] ${parseErrors} files had parse errors (skipped)`);
+    log(`[codemap] ${parseErrors} files had parse errors (skipped)`);
   }
-  console.log(`\nAdd to your CLAUDE.md:`);
-  console.log(`  Read the .codemap/ directory for project structure before exploring files.`);
+  log(`\nAdd to your CLAUDE.md:`);
+  log(`  Read the .codemap/ directory for project structure before exploring files.`);
 }
 
 main().catch((err) => {

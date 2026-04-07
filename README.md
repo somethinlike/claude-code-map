@@ -38,7 +38,7 @@ Every future conversation skips the exploration phase entirely.
 
 ## Languages
 
-TypeScript, JavaScript, TSX, JSX, Python, Go, Rust, Java, C#
+TypeScript, JavaScript, TSX, JSX, Python, Go, Rust, Java, C#, PHP, Ruby, Kotlin
 
 ## Frameworks
 
@@ -54,6 +54,8 @@ npx claude-code-map --exclude "*.test.ts"     # Skip patterns
 npx claude-code-map --schema prisma/schema.prisma  # Explicit schema
 npx claude-code-map --force                   # Ignore cache, full re-scan
 npx claude-code-map --hook                   # Install git pre-commit hook
+npx claude-code-map --stats                  # Show index file sizes & token estimate
+npx claude-code-map --quiet                  # Silent mode (for hooks/CI)
 npx claude-code-map @UserService             # Look up a symbol in the index
 ```
 
@@ -78,6 +80,24 @@ npx claude-code-map @UserService
 ```
 
 Searches all indexed symbols and types by name (case-insensitive substring match). Useful for quick "where is this?" lookups.
+
+## Token Stats
+
+See how much your index costs and saves:
+
+```bash
+npx claude-code-map --stats
+```
+
+```
+  .codemap/ index stats:
+  ─────────────────────────────────────────────
+  exports.md             9.4 KB   ~2,740 tokens
+  structure.md            893 B   ~256 tokens
+  types.md               4.4 KB   ~1,300 tokens
+  ─────────────────────────────────────────────
+  Total                 14.7 KB   ~4,296 tokens
+```
 
 ## Delta-Aware Caching
 
@@ -119,7 +139,7 @@ The actual savings depend on your project size. On a 21-file TypeScript project,
 
 The `.codemap/` files are stable between sessions, which makes them candidates for Claude API prompt caching (cached input tokens cost 90% less). Pre-indexing reduces how many tokens are loaded; caching reduces what each loaded token costs.
 
-Your mileage will vary. The best way to measure: run it on your project, start a conversation with and without the index files, and compare how many tool calls Claude makes before your first real question.
+Run `--stats` to see your actual index size and estimated token count. The best way to measure real savings: start a conversation with and without the index files, and compare how many tool calls Claude makes before your first real question.
 
 ## License
 

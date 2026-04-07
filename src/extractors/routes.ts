@@ -3,6 +3,9 @@ import { extractTsRoutes } from '../queries/typescript.ts';
 import { extractPyRoutes } from '../queries/python.ts';
 import { extractGoRoutes } from '../queries/go.ts';
 import { extractJavaRoutes } from '../queries/java.ts';
+import { extractPhpRoutes } from '../queries/php.ts';
+import { extractRubyRoutes } from '../queries/ruby.ts';
+import { extractKotlinRoutes } from '../queries/kotlin.ts';
 
 const AUTH_PATTERNS = [
   'auth', 'authenticate', 'requireAuth', 'isAuthenticated',
@@ -34,6 +37,12 @@ export async function extractRoutes(
       return extractGoRoutes(tree, language, filePath);
     case 'java':
       return extractJavaRoutes(tree, language, filePath);
+    case 'php':
+      return extractPhpRoutes(tree, language, filePath);
+    case 'ruby':
+      return extractRubyRoutes(tree, language, filePath);
+    case 'kotlin':
+      return extractKotlinRoutes(tree, language, filePath);
     default:
       return [];
   }

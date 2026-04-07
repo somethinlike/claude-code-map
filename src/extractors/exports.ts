@@ -5,6 +5,9 @@ import { extractGoExports } from '../queries/go.ts';
 import { extractRustExports } from '../queries/rust.ts';
 import { extractJavaExports } from '../queries/java.ts';
 import { extractCsharpExports } from '../queries/csharp.ts';
+import { extractPhpExports } from '../queries/php.ts';
+import { extractRubyExports } from '../queries/ruby.ts';
+import { extractKotlinExports } from '../queries/kotlin.ts';
 
 export async function extractExportsAsync(
   tree: any,
@@ -27,6 +30,12 @@ export async function extractExportsAsync(
       return extractJavaExports(tree, language, filePath);
     case 'csharp':
       return extractCsharpExports(tree, language, filePath);
+    case 'php':
+      return extractPhpExports(tree, language, filePath);
+    case 'ruby':
+      return extractRubyExports(tree, language, filePath);
+    case 'kotlin':
+      return extractKotlinExports(tree, language, filePath);
     default:
       return [];
   }

@@ -3,8 +3,8 @@ import { join } from 'node:path';
 
 const HOOK_STANZA = `
 # claude-code-map: auto-regenerate index on commit
-npx claude-code-map 2>/dev/null
-git add .codemap/ 2>/dev/null
+npx claude-code-map --quiet 2>/dev/null || true
+git add .codemap/ 2>/dev/null || true
 `;
 
 const SHEBANG = '#!/bin/sh\n';

@@ -1,5 +1,5 @@
 # claude-code-map -- Manual Test Guide
-**Updated:** 2026.04.02
+**Updated:** 2026.04.07
 
 ## Prerequisites
 - Node >= 20
@@ -126,9 +126,71 @@
 ### 6.4 --schema
 - [ ] `--schema prisma/schema.prisma` forces schema extraction
 
+### 6.5 --stats
+- [ ] Run `--stats` after a successful scan
+- [ ] Shows table with file sizes, estimated token counts, and total
+- [ ] Run `--stats` with no existing index → "No index found" message
+
+### 6.6 --quiet / -q
+- [ ] Run with `--quiet` → produces zero stdout output
+- [ ] Exit code still 0 on success
+- [ ] `-q` works as short alias
+
+### 6.7 --hook (pre-commit)
+- [ ] Run `--hook` → installs pre-commit hook
+- [ ] Hook uses `--quiet` and `|| true` (never blocks commits)
+- [ ] Make a commit → hook runs silently, .codemap/ staged automatically
+- [ ] If hook fails (e.g., node not available), commit still succeeds
+
 ---
 
-## 7. Error Cases
+## 7. Language Support
+
+### 7.1 TypeScript / JavaScript / TSX / JSX
+- [ ] Exports: functions, classes, interfaces, types, enums, constants
+- [ ] Types: interfaces with fields, enums, type aliases
+- [ ] Routes: Express/Fastify `app.get()` etc.
+
+### 7.2 Python
+- [ ] Functions, classes, decorated functions
+- [ ] Class fields from type annotations
+- [ ] Flask routes, Django URL patterns
+
+### 7.3 Go
+- [ ] Functions, methods with receivers
+- [ ] Structs, interfaces
+- [ ] HTTP router methods
+
+### 7.4 Rust
+- [ ] `pub` functions
+- [ ] Structs, enums, traits
+
+### 7.5 Java
+- [ ] Classes, public methods
+- [ ] Spring Boot routes (@GetMapping with path, bare @GetMapping, class-level @RequestMapping prefix)
+
+### 7.6 C#
+- [ ] Classes, public methods
+- [ ] Modifier detection (public/static without cross-product duplication)
+
+### 7.7 PHP
+- [ ] Functions, classes, interfaces, traits, enums (PHP 8.1+)
+- [ ] Public methods extracted from classes
+- [ ] Laravel routes (`Route::get()` etc.)
+
+### 7.8 Ruby
+- [ ] Methods, classes, modules, singleton methods (self.method)
+- [ ] attr_accessor/attr_reader/attr_writer as fields
+- [ ] Rails routes from routes.rb
+
+### 7.9 Kotlin
+- [ ] Functions, classes, objects
+- [ ] Interface properties and functions
+- [ ] Spring Boot routes (same annotation patterns as Java)
+
+---
+
+## 8. Error Cases
 
 ### 7.1 Empty Directory
 - [ ] Run in a directory with no supported files
@@ -145,7 +207,7 @@
 
 ---
 
-## 8. Real Project Tests
+## 9. Real Project Tests
 
 ### 8.1 page-save (Node CLI)
 - [ ] Run against `C:\Users\somet\Projects\page-save`

@@ -9,7 +9,10 @@ export type SupportedLanguage =
   | 'go'
   | 'rust'
   | 'java'
-  | 'csharp';
+  | 'csharp'
+  | 'php'
+  | 'ruby'
+  | 'kotlin';
 
 export const EXTENSION_MAP: Record<string, SupportedLanguage> = {
   '.ts': 'typescript',
@@ -21,6 +24,10 @@ export const EXTENSION_MAP: Record<string, SupportedLanguage> = {
   '.rs': 'rust',
   '.java': 'java',
   '.cs': 'csharp',
+  '.php': 'php',
+  '.rb': 'ruby',
+  '.kt': 'kotlin',
+  '.kts': 'kotlin',
 };
 
 // tree-sitter-wasms ships grammar files with these names
@@ -34,6 +41,9 @@ export const WASM_FILE_MAP: Record<SupportedLanguage, string> = {
   rust: 'tree-sitter-rust.wasm',
   java: 'tree-sitter-java.wasm',
   csharp: 'tree-sitter-c_sharp.wasm',
+  php: 'tree-sitter-php.wasm',
+  ruby: 'tree-sitter-ruby.wasm',
+  kotlin: 'tree-sitter-kotlin.wasm',
 };
 
 // Languages that share a grammar (queries must account for this)
@@ -47,6 +57,9 @@ export const GRAMMAR_LANGUAGE_MAP: Record<SupportedLanguage, string> = {
   rust: 'rust',
   java: 'java',
   csharp: 'csharp',
+  php: 'php',
+  ruby: 'ruby',
+  kotlin: 'kotlin',
 };
 
 // --- Extracted Data ---

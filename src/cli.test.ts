@@ -44,4 +44,30 @@ describe('parseArgs', () => {
     const result = parseArgs(['node', 'script', '--schema', 'prisma/schema.prisma']);
     expect(result.schema).toEqual(['prisma/schema.prisma']);
   });
+
+  it('parses --hook', () => {
+    expect(parseArgs(['node', 'script', '--hook']).action).toBe('hook');
+  });
+
+  it('parses --stats', () => {
+    expect(parseArgs(['node', 'script', '--stats']).action).toBe('stats');
+  });
+
+  it('parses --quiet', () => {
+    expect(parseArgs(['node', 'script', '--quiet']).quiet).toBe(true);
+  });
+
+  it('parses -q as quiet', () => {
+    expect(parseArgs(['node', 'script', '-q']).quiet).toBe(true);
+  });
+
+  it('parses @symbol as lookup', () => {
+    const result = parseArgs(['node', 'script', '@UserService']);
+    expect(result.action).toBe('lookup');
+    expect(result.symbolQuery).toBe('UserService');
+  });
+
+  it('defaults quiet to false', () => {
+    expect(parseArgs(['node', 'script']).quiet).toBe(false);
+  });
 });

@@ -5,6 +5,9 @@ import { extractGoTypes } from '../queries/go.ts';
 import { extractRustTypes } from '../queries/rust.ts';
 import { extractJavaTypes } from '../queries/java.ts';
 import { extractCsharpTypes } from '../queries/csharp.ts';
+import { extractPhpTypes } from '../queries/php.ts';
+import { extractRubyTypes } from '../queries/ruby.ts';
+import { extractKotlinTypes } from '../queries/kotlin.ts';
 
 export async function extractTypes(
   tree: any,
@@ -27,6 +30,12 @@ export async function extractTypes(
       return extractJavaTypes(tree, language, filePath);
     case 'csharp':
       return extractCsharpTypes(tree, language, filePath);
+    case 'php':
+      return extractPhpTypes(tree, language, filePath);
+    case 'ruby':
+      return extractRubyTypes(tree, language, filePath);
+    case 'kotlin':
+      return extractKotlinTypes(tree, language, filePath);
     default:
       return [];
   }

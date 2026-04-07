@@ -25,8 +25,8 @@ describe('installHook', () => {
     const content = readFileSync(hookPath, 'utf-8');
     expect(content).toContain('#!/bin/sh');
     expect(content).toContain('claude-code-map');
-    expect(content).toContain('npx claude-code-map 2>/dev/null');
-    expect(content).toContain('git add .codemap/ 2>/dev/null');
+    expect(content).toContain('npx claude-code-map --quiet 2>/dev/null || true');
+    expect(content).toContain('git add .codemap/ 2>/dev/null || true');
   });
 
   it('appends to existing pre-commit hook without clobbering', () => {

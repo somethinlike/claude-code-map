@@ -55,6 +55,12 @@ Co-located test files: `src/**/*.test.ts`. Pure-logic tests only (no WASM in tes
 - **`src/hook.ts`**: Pre-commit hook installation logic
 - **`src/lookup.ts`**: Symbol lookup from cache-data.json
 
+## V1.2 Features
+- **PHP, Ruby, Kotlin**: Three new languages with query modules in `src/queries/`
+- **`--stats`**: Shows index file sizes and estimated token counts
+- **`--quiet` / `-q`**: Suppresses all output (for git hooks / CI)
+- **`src/stats.ts`**: Index stats calculation and formatting
+
 ## Calendar Versioning
 Format: `YYYY.MM.DD.HHmm` (CST). npm uses semver (1.1.0), `--version` shows both.
 
