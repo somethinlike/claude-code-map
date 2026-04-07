@@ -1,6 +1,7 @@
 import type { ExtractedSymbol, ExtractedType, ExtractedRoute, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
 import type { QueryCapture } from '../parser.ts';
+import { truncate } from '../utils.ts';
 
 // --- Export Queries ---
 
@@ -308,7 +309,7 @@ export async function extractTsRoutes(
 
 // --- Helpers ---
 
-function parseInterfaceBody(bodyText: string): TypeField[] {
+export function parseInterfaceBody(bodyText: string): TypeField[] {
   const fields: TypeField[] = [];
   // Remove braces and split by semicolons/newlines
   const inner = bodyText.slice(1, -1).trim();
@@ -328,7 +329,7 @@ function parseInterfaceBody(bodyText: string): TypeField[] {
   return fields;
 }
 
-function parseEnumBody(bodyText: string): TypeField[] {
+export function parseEnumBody(bodyText: string): TypeField[] {
   const fields: TypeField[] = [];
   const inner = bodyText.slice(1, -1).trim();
   const members = inner.split(',').filter((m) => m.trim());
@@ -343,7 +344,3 @@ function parseEnumBody(bodyText: string): TypeField[] {
   return fields;
 }
 
-function truncate(str: string, maxLen: number): string {
-  if (str.length <= maxLen) return str;
-  return str.slice(0, maxLen - 3) + '...';
-}

@@ -1,5 +1,6 @@
 import type { ExtractedSymbol, ExtractedType, ExtractedRoute, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
+import { truncate } from '../utils.ts';
 
 // Python has no export keyword. All top-level definitions are "exported."
 // Names starting with _ are conventionally private.
@@ -209,7 +210,7 @@ export async function extractPyRoutes(
   return routes;
 }
 
-function parsePythonClassFields(bodyText: string): TypeField[] {
+export function parsePythonClassFields(bodyText: string): TypeField[] {
   const fields: TypeField[] = [];
   const lines = bodyText.split('\n');
 
@@ -228,7 +229,3 @@ function parsePythonClassFields(bodyText: string): TypeField[] {
   return fields;
 }
 
-function truncate(str: string, maxLen: number): string {
-  if (str.length <= maxLen) return str;
-  return str.slice(0, maxLen - 3) + '...';
-}

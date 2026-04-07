@@ -131,14 +131,24 @@ npx claude-code-map --help
 ### Cache (delta-aware regeneration)
 `.codemap/cache.json` stores `{path → {mtimeMs, size}}`. On subsequent runs, only changed files are re-parsed. `--force` bypasses cache. `.codemap/cache-data.json` stores extraction results per file.
 
+## V1.1 (Community-Driven Release) — In Progress
+
+Inspired by community feedback from the [origin thread](https://old.reddit.com/r/ClaudeAI/comments/1sa2jbz/). Features:
+
+- [x] **OEB Hardening**: 88+ vitest tests co-located with source (13 test files)
+- [x] **Shared utils**: Extracted `truncate()` and `groupBy()` from 8 duplicated files
+- [x] **`--hook` flag**: Generates git pre-commit hook for auto-regeneration
+- [x] **`@symbol` lookup**: Search the index for symbols by name
+- [x] **Gitignore integration**: Scanner respects `.gitignore` patterns
+- [x] **Java Spring route fix**: Extract actual annotation path, not handler name
+- [x] **C# modifier detection**: Check for `public` keyword instead of hardcoding `isExported: true`
+
 ## V2 Scope (Future — Do Not Build Yet)
 
 - Watch mode (`--watch`) with file system watcher for real-time re-indexing
 - MCP server mode — native Claude tool integration, no Bash calls
-- Pre-commit hook integration (`--hook` generates a git hook script)
 - More languages: Kotlin, Swift, PHP, Ruby, Elixir, Dart
 - Monorepo support (scan multiple packages, per-package output)
-- `@symbol` lookup CLI command (query the index for a specific symbol)
 - Configurable language subset (don't download all WASM grammars)
 
 ## Implementation Sequence

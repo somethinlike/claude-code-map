@@ -1,11 +1,27 @@
 import { readdir, stat } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, relative, extname, basename, dirname } from 'node:path';
 import { EXTENSION_MAP, DEFAULT_EXCLUDE, DEFAULT_SKIP_PATTERNS } from './types.ts';
 import type { ScannedFile, CodemapConfig, FileNode, DetectedFramework, SupportedLanguage } from './types.ts';
 
+export function loadGitignore(projectRoot: string): string[] {
+  const gitignorePath = join(projectRoot, '.gitignore');
+  if (!existsSync(gitignorePath)) return [];
+  const content = readFileSync(gitignorePath, 'utf-8');
+  return content.split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#'))
+    .map(line => line.replace(/\/$/, '')); // strip trailing slashes
+}
+
 export async function scanFiles(projectRoot: string, config: CodemapConfig): Promise<ScannedFile[]> {
   const results: ScannedFile[] = [];
   const excludeDirs = new Set([...DEFAULT_EXCLUDE, ...config.exclude]);
+
+  const gitignorePatterns = loadGitignore(projectRoot);
+  for (const pattern of gitignorePatterns) {
+    excludeDirs.add(pattern);
+  }
 
   async function walk(dir: string): Promise<void> {
     let entries;

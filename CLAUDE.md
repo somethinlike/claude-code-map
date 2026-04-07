@@ -35,10 +35,28 @@ cli.ts (entry) → scanner.ts → parser.ts (WASM) → extractors/ → formatter
 ```bash
 node --import=tsx/esm src/cli.ts           # scan current dir
 node --import=tsx/esm src/cli.ts --force   # ignore cache
+node --import=tsx/esm src/cli.ts --hook    # install pre-commit hook
+node --import=tsx/esm src/cli.ts @Symbol   # look up a symbol in the index
 ```
 
+## Running Tests
+```bash
+npm test          # vitest run (one-shot)
+npm run test:watch  # vitest watch mode
+```
+
+Co-located test files: `src/**/*.test.ts`. Pure-logic tests only (no WASM in tests).
+
+## V1.1 Features
+- **`--hook`**: Generates a git pre-commit hook that auto-regenerates .codemap/ on every commit
+- **`@symbol` lookup**: `claude-code-map @UserService` searches the index for matching symbols
+- **Gitignore integration**: Scanner reads `.gitignore` and excludes matching directories automatically
+- **Shared utils**: `src/utils.ts` — `truncate()` and `groupBy()` (extracted from 8 files)
+- **`src/hook.ts`**: Pre-commit hook installation logic
+- **`src/lookup.ts`**: Symbol lookup from cache-data.json
+
 ## Calendar Versioning
-Format: `YYYY.MM.DD.HHmm` (CST)
+Format: `YYYY.MM.DD.HHmm` (CST). npm uses semver (1.1.0), `--version` shows both.
 
 ## npm Publishing
 ```bash

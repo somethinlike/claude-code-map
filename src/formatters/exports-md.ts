@@ -1,4 +1,5 @@
 import type { ExtractedSymbol } from '../types.ts';
+import { groupBy } from '../utils.ts';
 
 const MAX_EXPORTS_PER_FILE = 4;
 
@@ -54,7 +55,7 @@ export function formatExports(symbols: ExtractedSymbol[]): string {
   return lines.join('\n');
 }
 
-function sortSymbols(symbols: ExtractedSymbol[]): ExtractedSymbol[] {
+export function sortSymbols(symbols: ExtractedSymbol[]): ExtractedSymbol[] {
   const order: Record<string, number> = {
     function: 0,
     method: 1,
@@ -73,12 +74,3 @@ function sortSymbols(symbols: ExtractedSymbol[]): ExtractedSymbol[] {
   });
 }
 
-function groupBy<T>(items: T[], key: (item: T) => string): Record<string, T[]> {
-  const groups: Record<string, T[]> = {};
-  for (const item of items) {
-    const k = key(item);
-    if (!groups[k]) groups[k] = [];
-    groups[k].push(item);
-  }
-  return groups;
-}

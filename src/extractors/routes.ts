@@ -85,7 +85,7 @@ function extractFileBasedRoutes(
   return routes;
 }
 
-function filePathToRoutePath(filePath: string): string {
+export function filePathToRoutePath(filePath: string): string {
   let route = filePath
     .replace(/^app\//, '/')
     .replace(/\/route\.\w+$/, '')

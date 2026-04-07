@@ -85,7 +85,7 @@ function renderTree(
   }
 }
 
-function sortChildren(children: FileNode[]): FileNode[] {
+export function sortChildren(children: FileNode[]): FileNode[] {
   return [...children].sort((a, b) => {
     // Directories first
     if (a.isDirectory && !b.isDirectory) return -1;
@@ -96,7 +96,7 @@ function sortChildren(children: FileNode[]): FileNode[] {
 
 const MAX_VISIBLE_CHILDREN = 8;
 
-function collapseChildren(children: FileNode[]): (FileNode | string)[] {
+export function collapseChildren(children: FileNode[]): (FileNode | string)[] {
   if (children.length <= MAX_VISIBLE_CHILDREN) return children;
 
   const result: (FileNode | string)[] = [];

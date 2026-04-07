@@ -1,0 +1,14 @@
+# Test files
+src/**/*.test.ts
+vitest.config.ts
+
+# Dev docs
+MANUAL-TESTS.md
+ROADMAP.md
+gemini-audit.md
+
+# Generated output (users generate their own)
+.codemap/
+
+# Temp files
+tmp/

@@ -54,7 +54,7 @@ export function formatRoutes(
   return lines.join('\n');
 }
 
-function groupRoutesByPrefix(routes: ExtractedRoute[]): Record<string, ExtractedRoute[]> {
+export function groupRoutesByPrefix(routes: ExtractedRoute[]): Record<string, ExtractedRoute[]> {
   const groups: Record<string, ExtractedRoute[]> = {};
 
   for (const route of routes) {

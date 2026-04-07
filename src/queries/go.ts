@@ -1,5 +1,6 @@
 import type { ExtractedSymbol, ExtractedType, ExtractedRoute, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
+import { truncate } from '../utils.ts';
 
 // Go exports are determined by capitalization of the first letter.
 
@@ -173,7 +174,7 @@ export async function extractGoRoutes(
   return routes;
 }
 
-function parseGoStructFields(fieldsText: string): TypeField[] {
+export function parseGoStructFields(fieldsText: string): TypeField[] {
   const fields: TypeField[] = [];
   const inner = fieldsText.replace(/^\{/, '').replace(/\}$/, '').trim();
   const lines = inner.split('\n').filter((l) => l.trim());
@@ -192,7 +193,3 @@ function parseGoStructFields(fieldsText: string): TypeField[] {
   return fields;
 }
 
-function truncate(str: string, maxLen: number): string {
-  if (str.length <= maxLen) return str;
-  return str.slice(0, maxLen - 3) + '...';
-}

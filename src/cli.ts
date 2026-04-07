@@ -17,6 +17,8 @@ import { formatExports } from './formatters/exports-md.ts';
 import { formatRoutes } from './formatters/routes-md.ts';
 import { formatSchema } from './formatters/schema-md.ts';
 import { formatTypes } from './formatters/types-md.ts';
+import { installHook } from './hook.ts';
+import { lookupSymbol } from './lookup.ts';
 import type { ParsedFile, ExtractedSymbol, ExtractedRoute, ExtractedType, ExtractedModel } from './types.ts';
 
 // --- Version ---
@@ -30,15 +32,16 @@ function getVersion(): string {
 // --- Argument Parsing ---
 
 interface CliArgs {
-  action: 'run' | 'help' | 'version';
+  action: 'run' | 'help' | 'version' | 'hook' | 'lookup';
   output?: string;
   include: string[];
   exclude: string[];
   schema: string[];
   force: boolean;
+  symbolQuery?: string;
 }
 
-function parseArgs(argv: string[]): CliArgs {
+export function parseArgs(argv: string[]): CliArgs {
   const args = argv.slice(2);
   const result: CliArgs = {
     action: 'run',
@@ -71,11 +74,17 @@ function parseArgs(argv: string[]): CliArgs {
       case '--exclude':
         result.exclude.push(args[++i]);
         break;
+      case '--hook':
+        result.action = 'hook';
+        break;
       case '--schema':
         result.schema.push(args[++i]);
         break;
       default:
-        if (arg.startsWith('-')) {
+        if (arg.startsWith('@')) {
+          result.action = 'lookup';
+          result.symbolQuery = arg.slice(1);
+        } else if (arg.startsWith('-')) {
           console.error(`Unknown flag: ${arg}`);
           process.exit(1);
         }
@@ -122,6 +131,7 @@ claude-code-map — Pre-index your codebase for AI assistants
 
 Usage:
   npx claude-code-map [options]
+  npx claude-code-map @<symbol>          # Look up a symbol in the index
 
 Options:
   --output <dir>      Output directory (default: .codemap)
@@ -129,6 +139,7 @@ Options:
   --exclude <glob>    Exclude pattern (repeatable)
   --schema <path>     Schema file path (repeatable)
   --force             Ignore cache, re-parse everything
+  --hook              Install pre-commit git hook for auto-regeneration
   --help, -h          Show this help
   --version, -v       Show version
 
@@ -137,6 +148,8 @@ Examples:
   npx claude-code-map --include src --include lib
   npx claude-code-map --exclude "*.test.ts"
   npx claude-code-map --force                  # Full re-scan
+  npx claude-code-map --hook                   # Install git hook
+  npx claude-code-map @parseArgs               # Look up symbol
 
 Output:
   .codemap/structure.md   File tree with framework annotations
@@ -163,8 +176,19 @@ async function main(): Promise<void> {
   }
 
   const projectRoot = resolve('.');
+
+  if (cliArgs.action === 'hook') {
+    installHook(projectRoot);
+    return;
+  }
+
   const config = loadConfig(projectRoot, cliArgs);
   const outputDir = resolve(projectRoot, config.output);
+
+  if (cliArgs.action === 'lookup') {
+    lookupSymbol(cliArgs.symbolQuery!, outputDir);
+    return;
+  }
 
   // Step 1: Detect framework
   console.log('[codemap] Detecting framework...');

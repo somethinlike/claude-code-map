@@ -1,6 +1,6 @@
 {
   "name": "claude-code-map",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "type": "module",
   "license": "CC0-1.0",
   "description": "Pre-index your codebase so Claude Code skips the exploration phase. Tree-sitter AST extraction, static markdown output, delta-aware regeneration.",
@@ -18,7 +18,9 @@
   },
   "scripts": {
     "map": "tsx src/cli.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "claude",
@@ -37,12 +39,13 @@
   },
   "author": "Ryan Wills <somethinlike@gmail.com>",
   "dependencies": {
+    "tree-sitter-wasms": "^0.1.13",
     "tsx": "^4.19.0",
-    "web-tree-sitter": "^0.25.0",
-    "tree-sitter-wasms": "^0.1.13"
+    "web-tree-sitter": "^0.25.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.3"
   }
 }

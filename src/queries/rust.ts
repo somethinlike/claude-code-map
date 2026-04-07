@@ -1,5 +1,6 @@
 import type { ExtractedSymbol, ExtractedType, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
+import { truncate } from '../utils.ts';
 
 // Rust exports are determined by `pub` visibility modifier.
 
@@ -141,7 +142,7 @@ export async function extractRustTypes(
   return types;
 }
 
-function parseRustStructFields(fieldsText: string): TypeField[] {
+export function parseRustStructFields(fieldsText: string): TypeField[] {
   const fields: TypeField[] = [];
   const inner = fieldsText.replace(/^\{/, '').replace(/\}$/, '').trim();
   const lines = inner.split(',').map((l) => l.trim()).filter(Boolean);
@@ -160,7 +161,7 @@ function parseRustStructFields(fieldsText: string): TypeField[] {
   return fields;
 }
 
-function parseRustEnumVariants(variantsText: string): TypeField[] {
+export function parseRustEnumVariants(variantsText: string): TypeField[] {
   const fields: TypeField[] = [];
   const inner = variantsText.replace(/^\{/, '').replace(/\}$/, '').trim();
   const variants = inner.split(',').map((v) => v.trim()).filter(Boolean);
@@ -175,7 +176,3 @@ function parseRustEnumVariants(variantsText: string): TypeField[] {
   return fields;
 }
 
-function truncate(str: string, maxLen: number): string {
-  if (str.length <= maxLen) return str;
-  return str.slice(0, maxLen - 3) + '...';
-}

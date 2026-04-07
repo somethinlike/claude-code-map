@@ -1,4 +1,5 @@
 import type { ExtractedType } from '../types.ts';
+import { groupBy } from '../utils.ts';
 
 const MAX_FIELDS = 5;
 
@@ -84,12 +85,3 @@ function formatEnum(t: ExtractedType, lines: string[]): void {
   lines.push('');
 }
 
-function groupBy<T>(items: T[], key: (item: T) => string): Record<string, T[]> {
-  const groups: Record<string, T[]> = {};
-  for (const item of items) {
-    const k = key(item);
-    if (!groups[k]) groups[k] = [];
-    groups[k].push(item);
-  }
-  return groups;
-}
