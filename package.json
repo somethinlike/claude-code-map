@@ -1,6 +1,6 @@
 {
   "name": "claude-code-map",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "license": "CC0-1.0",
   "description": "Pre-index your codebase so Claude Code skips the exploration phase. Tree-sitter AST extraction, static markdown output, delta-aware regeneration.",
