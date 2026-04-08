@@ -273,6 +273,19 @@ export async function extractTsTypes(
   return types;
 }
 
+// Objects that look like Express/Fastify routers
+const ROUTER_NAMES = new Set([
+  'app', 'router', 'server', 'api', 'route', 'routes',
+  'express', 'fastify', 'hono', 'koa',
+]);
+
+// Objects that are NOT routers (Supabase client, fetch, etc.)
+const NON_ROUTER_NAMES = new Set([
+  'supabase', 'client', 'db', 'prisma', 'fetch',
+  'axios', 'http', 'https', 'request', 'response',
+  'cache', 'store', 'storage', 'map', 'set',
+]);
+
 export async function extractTsRoutes(
   tree: any,
   language: SupportedLanguage,
@@ -285,14 +298,28 @@ export async function extractTsRoutes(
 
   for (let i = 0; i < captures.length; i++) {
     const cap = captures[i];
-    if (cap.name === 'http_method' && HTTP_METHODS.has(cap.text.toLowerCase())) {
+    if (cap.name === 'router_obj') {
+      // Filter: only proceed if the object looks like a router
+      const objName = cap.text.toLowerCase();
+      if (NON_ROUTER_NAMES.has(objName)) continue;
+      // If not a known router name, require the path to start with /
+      const isKnownRouter = ROUTER_NAMES.has(objName);
+
+      const methodCap = captures[i + 1];
+      if (!methodCap || methodCap.name !== 'http_method') continue;
+      if (!HTTP_METHODS.has(methodCap.text.toLowerCase())) continue;
+
       const pathCapture = captures.find(
         (c, j) => j > i && c.name === 'route_path' && c.startRow === cap.startRow,
       );
       if (pathCapture) {
         const routePath = pathCapture.text.replace(/['"]/g, '');
+
+        // Non-router objects: only accept if path looks like a URL path
+        if (!isKnownRouter && !routePath.startsWith('/')) continue;
+
         routes.push({
-          method: cap.text.toUpperCase(),
+          method: methodCap.text.toUpperCase(),
           path: routePath,
           filePath,
           line: cap.startRow + 1,

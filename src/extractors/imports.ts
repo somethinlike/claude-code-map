@@ -47,7 +47,7 @@ export async function extractImports(
 // --- Import Resolution ---
 
 // TS/JS extensions to try when resolving relative imports
-const TS_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
+const TS_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.astro'];
 const TS_INDEX_FILES = TS_EXTENSIONS.map((ext) => `index${ext}`);
 
 // Python file patterns for module resolution
@@ -70,6 +70,7 @@ export function resolveImport(
     case 'javascript':
     case 'tsx':
     case 'jsx':
+    case 'astro':
       return resolveTsImport(specifier, importingFile, projectFiles);
     case 'python':
       return resolvePyImport(specifier, importingFile, projectFiles);

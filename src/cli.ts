@@ -20,6 +20,7 @@ import { formatTypes } from './formatters/types-md.ts';
 import { extractImports, resolveImport } from './extractors/imports.ts';
 import { buildImportGraph, computeBlastRadius, formatBlastRadius } from './graph.ts';
 import { formatGraph } from './formatters/graph-md.ts';
+import { extractAstroImports, extractAstroRoutes } from './queries/astro.ts';
 import { installHook } from './hook.ts';
 import { lookupSymbol } from './lookup.ts';
 import { getIndexStats, formatStats } from './stats.ts';
@@ -292,6 +293,33 @@ async function main(): Promise<void> {
   let parseErrors = 0;
   for (const file of changed) {
     try {
+      // .astro files: no tree-sitter grammar, use regex extraction
+      if (file.language === 'astro') {
+        let source: string;
+        try {
+          source = readFileSync(file.absolutePath, 'utf-8');
+        } catch {
+          parseErrors++;
+          continue;
+        }
+
+        const imports = extractAstroImports(source, file.relativePath);
+        const routes = extractAstroRoutes(file.relativePath);
+
+        allRoutes.push(...routes);
+        allImports.push(...imports);
+
+        parsedFiles[file.relativePath] = {
+          filePath: file.relativePath,
+          language: file.language,
+          symbols: [],
+          routes,
+          types: [],
+          imports,
+        };
+        continue;
+      }
+
       const tree = await parseFile(file.absolutePath, file.language);
       if (!tree) {
         parseErrors++;

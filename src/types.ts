@@ -12,7 +12,8 @@ export type SupportedLanguage =
   | 'csharp'
   | 'php'
   | 'ruby'
-  | 'kotlin';
+  | 'kotlin'
+  | 'astro';
 
 export const EXTENSION_MAP: Record<string, SupportedLanguage> = {
   '.ts': 'typescript',
@@ -28,6 +29,7 @@ export const EXTENSION_MAP: Record<string, SupportedLanguage> = {
   '.rb': 'ruby',
   '.kt': 'kotlin',
   '.kts': 'kotlin',
+  '.astro': 'astro',
 };
 
 // tree-sitter-wasms ships grammar files with these names
