@@ -18,7 +18,7 @@ No global install needed. Runs once, generates index files, done.
 
 ## What It Does
 
-Scans your project using tree-sitter AST parsing and generates 5 compact markdown files in `.codemap/`:
+Scans your project using tree-sitter AST parsing and generates compact markdown files in `.codemap/`:
 
 | File | Contents |
 |------|----------|
@@ -27,6 +27,7 @@ Scans your project using tree-sitter AST parsing and generates 5 compact markdow
 | `routes.md` | HTTP routes with methods and auth tags |
 | `schema.md` | Database schema (Prisma, Django, etc.) |
 | `types.md` | Interfaces, enums, type aliases with fields |
+| `graph.md` | Import dependency graph, hot files ranking, external deps |
 
 Then add one line to your `CLAUDE.md`:
 
@@ -57,6 +58,7 @@ npx claude-code-map --hook                   # Install git pre-commit hook
 npx claude-code-map --stats                  # Show index file sizes & token estimate
 npx claude-code-map --quiet                  # Silent mode (for hooks/CI)
 npx claude-code-map @UserService             # Look up a symbol in the index
+npx claude-code-map --blast src/types.ts     # Show blast radius (what depends on this file)
 ```
 
 ## Keeping the Index Fresh
@@ -99,6 +101,42 @@ npx claude-code-map --stats
   Total                 14.7 KB   ~4,296 tokens
 ```
 
+## Dependency Graph
+
+V2.0 builds a full import dependency graph from tree-sitter AST extraction across all 12 languages. The graph tracks which files import which, resolving relative paths to actual project files.
+
+The `.codemap/graph.md` output includes:
+
+- **Hot Files** -- files ranked by in-degree (number of dependents). The most-imported files in your project, sorted by impact.
+- **External Dependencies** -- third-party and Node built-in imports aggregated across the project.
+
+### Blast Radius
+
+See what breaks when you change a file:
+
+```bash
+npx claude-code-map --blast src/types.ts
+```
+
+```
+Blast radius for src/types.ts (3 hops):
+
+Hop 1 (direct dependents):
+  src/parser.ts
+  src/scanner.ts
+  src/cache.ts
+  src/cli.ts
+
+Hop 2:
+  src/extractors/exports.ts
+  src/extractors/routes.ts
+
+Hop 3:
+  src/formatters/exports-md.ts
+```
+
+This traverses the reverse dependency graph via BFS up to 3 hops. Useful for estimating the impact of a refactor before you start.
+
 ## Delta-Aware Caching
 
 On subsequent runs, only changed files are re-parsed. A cache file tracks modification times and file sizes. Use `--force` to bypass.
@@ -135,7 +173,7 @@ Unlike regex-based tools, tree-sitter builds a real AST. It handles multi-line d
 
 ## Token Savings
 
-The actual savings depend on your project size. On a 21-file TypeScript project, the `.codemap/` output totals ~11KB across 4 files (~2,800 tokens). On a 150+ file project with hundreds of routes, it replaces what would otherwise be 10-15 file-reading tool calls at conversation start.
+The actual savings depend on your project size. On a 21-file TypeScript project, the `.codemap/` output totals ~11KB across 4 files (~2,800 tokens). On a 150+ file project with hundreds of routes, it replaces what would otherwise be 10-15 file-reading tool calls at conversation start. The `graph.md` file adds the import dependency graph and hot files ranking -- information that would otherwise require Claude to trace imports across dozens of files.
 
 The `.codemap/` files are stable between sessions, which makes them candidates for Claude API prompt caching (cached input tokens cost 90% less). Pre-indexing reduces how many tokens are loaded; caching reduces what each loaded token costs.
 

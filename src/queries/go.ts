@@ -1,4 +1,4 @@
-import type { ExtractedSymbol, ExtractedType, ExtractedRoute, TypeField, SupportedLanguage } from '../types.ts';
+import type { ExtractedSymbol, ExtractedType, ExtractedRoute, ExtractedImport, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
 import { truncate } from '../utils.ts';
 
@@ -191,5 +191,41 @@ export function parseGoStructFields(fieldsText: string): TypeField[] {
   }
 
   return fields;
+}
+
+// --- Import Queries ---
+
+const IMPORT_SPEC_QUERY = `
+(import_spec
+  path: (interpreted_string_literal) @import_source)
+`;
+
+export async function extractGoImports(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedImport[]> {
+  const imports: ExtractedImport[] = [];
+  const seen = new Set<string>();
+
+  const captures = await runQuery(language, tree, IMPORT_SPEC_QUERY);
+  for (const cap of captures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: true, // all Go imports are package paths; resolver checks go.mod later
+          language,
+        });
+      }
+    }
+  }
+
+  return imports;
 }
 

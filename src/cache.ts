@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CacheManifest, ScannedFile, ParsedFile } from './types.ts';
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const CACHE_FILE = 'cache.json';
 const CACHE_DATA_FILE = 'cache-data.json';
 

@@ -37,6 +37,7 @@ node --import=tsx/esm src/cli.ts           # scan current dir
 node --import=tsx/esm src/cli.ts --force   # ignore cache
 node --import=tsx/esm src/cli.ts --hook    # install pre-commit hook
 node --import=tsx/esm src/cli.ts @Symbol   # look up a symbol in the index
+node --import=tsx/esm src/cli.ts --blast src/types.ts  # blast radius for a file
 ```
 
 ## Running Tests
@@ -45,7 +46,7 @@ npm test          # vitest run (one-shot)
 npm run test:watch  # vitest watch mode
 ```
 
-Co-located test files: `src/**/*.test.ts`. Pure-logic tests only (no WASM in tests).
+153 tests across 19 test files. Co-located: `src/**/*.test.ts`. Pure-logic tests only (no WASM in tests).
 
 ## V1.1 Features
 - **`--hook`**: Generates a git pre-commit hook that auto-regenerates .codemap/ on every commit
@@ -60,6 +61,16 @@ Co-located test files: `src/**/*.test.ts`. Pure-logic tests only (no WASM in tes
 - **`--stats`**: Shows index file sizes and estimated token counts
 - **`--quiet` / `-q`**: Suppresses all output (for git hooks / CI)
 - **`src/stats.ts`**: Index stats calculation and formatting
+
+## V2.0 Features
+- **Import graph extraction** via tree-sitter queries for all 12 languages
+- **Import resolution**: raw import specifiers resolved to project-relative file paths
+- **`graph.md` output**: `.codemap/graph.md` with hot files table (ranked by in-degree) + external dependencies summary
+- **`--blast <file>` CLI flag**: prints blast radius to stdout -- BFS through reverse dependency edges, up to 3 hops
+- **`src/extractors/imports.ts`**: import extraction dispatcher + resolver (relative paths to project files)
+- **`src/graph.ts`**: graph construction (adjacency + reverse adjacency), BFS blast radius, hot files ranking
+- **`src/formatters/graph-md.ts`**: graph markdown formatter
+- **153 tests** across 19 test files
 
 ## Calendar Versioning
 Format: `YYYY.MM.DD.HHmm` (CST). npm uses semver (1.1.0), `--version` shows both.

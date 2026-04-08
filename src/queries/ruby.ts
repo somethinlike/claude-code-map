@@ -1,4 +1,4 @@
-import type { ExtractedSymbol, ExtractedType, ExtractedRoute, TypeField, SupportedLanguage } from '../types.ts';
+import type { ExtractedSymbol, ExtractedType, ExtractedRoute, ExtractedImport, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
 import { truncate } from '../utils.ts';
 
@@ -210,4 +210,47 @@ export function parseRubyClassFields(bodyText: string): TypeField[] {
   }
 
   return fields;
+}
+
+// --- Import Queries ---
+
+const REQUIRE_CALL_QUERY = `
+(call
+  method: (identifier) @_method
+  arguments: (argument_list
+    (string) @import_source))
+`;
+
+export async function extractRubyImports(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedImport[]> {
+  const imports: ExtractedImport[] = [];
+  const seen = new Set<string>();
+
+  // require 'json', require_relative './helper'
+  const captures = await runQuery(language, tree, REQUIRE_CALL_QUERY);
+  for (let i = 0; i < captures.length; i++) {
+    const cap = captures[i];
+    if (cap.name === '_method' && (cap.text === 'require' || cap.text === 'require_relative')) {
+      const sourceCap = captures[i + 1];
+      if (sourceCap?.name === 'import_source') {
+        const source = sourceCap.text.replace(/['"]/g, '');
+        if (!seen.has(source)) {
+          seen.add(source);
+          imports.push({
+            source,
+            resolvedPath: null,
+            filePath,
+            line: sourceCap.startRow + 1,
+            isExternal: cap.text !== 'require_relative', // require_relative is always local
+            language,
+          });
+        }
+      }
+    }
+  }
+
+  return imports;
 }

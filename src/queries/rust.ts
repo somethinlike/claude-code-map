@@ -1,4 +1,4 @@
-import type { ExtractedSymbol, ExtractedType, TypeField, SupportedLanguage } from '../types.ts';
+import type { ExtractedSymbol, ExtractedType, ExtractedImport, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
 import { truncate } from '../utils.ts';
 
@@ -174,5 +174,67 @@ export function parseRustEnumVariants(variantsText: string): TypeField[] {
   }
 
   return fields;
+}
+
+// --- Import Queries ---
+
+const USE_QUERY = `
+(use_declaration
+  argument: (_) @import_source)
+`;
+
+const EXTERN_CRATE_QUERY = `
+(extern_crate_declaration
+  name: (identifier) @import_source)
+`;
+
+export async function extractRustImports(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedImport[]> {
+  const imports: ExtractedImport[] = [];
+  const seen = new Set<string>();
+
+  // use statements: use std::collections::HashMap, use crate::module::Thing
+  const useCaptures = await runQuery(language, tree, USE_QUERY);
+  for (const cap of useCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        const isLocal = source.startsWith('crate::') || source.startsWith('super::') || source.startsWith('self::');
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: !isLocal,
+          language,
+        });
+      }
+    }
+  }
+
+  // extern crate declarations
+  const externCaptures = await runQuery(language, tree, EXTERN_CRATE_QUERY);
+  for (const cap of externCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: true,
+          language,
+        });
+      }
+    }
+  }
+
+  return imports;
 }
 

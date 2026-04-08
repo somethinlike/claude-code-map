@@ -1,4 +1,4 @@
-import type { ExtractedSymbol, ExtractedType, ExtractedRoute, TypeField, SupportedLanguage } from '../types.ts';
+import type { ExtractedSymbol, ExtractedType, ExtractedRoute, ExtractedImport, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
 import type { QueryCapture } from '../parser.ts';
 import { truncate } from '../utils.ts';
@@ -342,5 +342,98 @@ export function parseEnumBody(bodyText: string): TypeField[] {
   }
 
   return fields;
+}
+
+// --- Import Queries ---
+
+const ES_IMPORT_QUERY = `
+(import_statement
+  source: (string) @import_source)
+`;
+
+const REQUIRE_QUERY = `
+(call_expression
+  function: (identifier) @_func
+  arguments: (arguments
+    (string) @import_source))
+`;
+
+const DYNAMIC_IMPORT_QUERY = `
+(call_expression
+  function: (import)
+  arguments: (arguments
+    (string) @import_source))
+`;
+
+export async function extractTsImports(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedImport[]> {
+  const imports: ExtractedImport[] = [];
+  const seen = new Set<string>();
+
+  // ES imports: import { foo } from './bar'
+  const esCaptures = await runQuery(language, tree, ES_IMPORT_QUERY);
+  for (const cap of esCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null, // resolved later by the import resolver
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: !source.startsWith('.') && !source.startsWith('@/'),
+          language,
+        });
+      }
+    }
+  }
+
+  // require() calls: const foo = require('./bar')
+  const reqCaptures = await runQuery(language, tree, REQUIRE_QUERY);
+  for (let i = 0; i < reqCaptures.length; i++) {
+    const cap = reqCaptures[i];
+    if (cap.name === '_func' && cap.text === 'require') {
+      const sourceCap = reqCaptures[i + 1];
+      if (sourceCap?.name === 'import_source') {
+        const source = sourceCap.text.replace(/['"]/g, '');
+        if (!seen.has(source)) {
+          seen.add(source);
+          imports.push({
+            source,
+            resolvedPath: null,
+            filePath,
+            line: sourceCap.startRow + 1,
+            isExternal: !source.startsWith('.') && !source.startsWith('@/'),
+            language,
+          });
+        }
+      }
+    }
+  }
+
+  // Dynamic imports: import('./bar')
+  const dynCaptures = await runQuery(language, tree, DYNAMIC_IMPORT_QUERY);
+  for (const cap of dynCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: !source.startsWith('.') && !source.startsWith('@/'),
+          language,
+        });
+      }
+    }
+  }
+
+  return imports;
 }
 

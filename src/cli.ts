@@ -17,10 +17,13 @@ import { formatExports } from './formatters/exports-md.ts';
 import { formatRoutes } from './formatters/routes-md.ts';
 import { formatSchema } from './formatters/schema-md.ts';
 import { formatTypes } from './formatters/types-md.ts';
+import { extractImports, resolveImport } from './extractors/imports.ts';
+import { buildImportGraph, computeBlastRadius, formatBlastRadius } from './graph.ts';
+import { formatGraph } from './formatters/graph-md.ts';
 import { installHook } from './hook.ts';
 import { lookupSymbol } from './lookup.ts';
 import { getIndexStats, formatStats } from './stats.ts';
-import type { ParsedFile, ExtractedSymbol, ExtractedRoute, ExtractedType, ExtractedModel } from './types.ts';
+import type { ParsedFile, ExtractedSymbol, ExtractedRoute, ExtractedType, ExtractedModel, ExtractedImport } from './types.ts';
 
 // --- Version ---
 
@@ -33,7 +36,7 @@ function getVersion(): string {
 // --- Argument Parsing ---
 
 interface CliArgs {
-  action: 'run' | 'help' | 'version' | 'hook' | 'lookup' | 'stats';
+  action: 'run' | 'help' | 'version' | 'hook' | 'lookup' | 'stats' | 'blast';
   output?: string;
   include: string[];
   exclude: string[];
@@ -41,6 +44,7 @@ interface CliArgs {
   force: boolean;
   quiet: boolean;
   symbolQuery?: string;
+  blastTarget?: string;
 }
 
 export function parseArgs(argv: string[]): CliArgs {
@@ -89,6 +93,10 @@ export function parseArgs(argv: string[]): CliArgs {
         break;
       case '--schema':
         result.schema.push(args[++i]);
+        break;
+      case '--blast':
+        result.action = 'blast';
+        result.blastTarget = args[++i];
         break;
       default:
         if (arg.startsWith('@')) {
@@ -142,6 +150,7 @@ claude-code-map — Pre-index your codebase for AI assistants
 Usage:
   npx claude-code-map [options]
   npx claude-code-map @<symbol>          # Look up a symbol in the index
+  npx claude-code-map --blast <file>     # Show blast radius for a file
 
 Options:
   --output <dir>      Output directory (default: .codemap)
@@ -151,6 +160,7 @@ Options:
   --force             Ignore cache, re-parse everything
   --hook              Install pre-commit git hook for auto-regeneration
   --stats             Show index file sizes and estimated token counts
+  --blast <file>      Show blast radius (what depends on this file)
   --quiet, -q         Suppress all output (for git hooks / CI)
   --help, -h          Show this help
   --version, -v       Show version
@@ -162,6 +172,7 @@ Examples:
   npx claude-code-map --force                  # Full re-scan
   npx claude-code-map --hook                   # Install git hook
   npx claude-code-map --stats                  # Show token estimate
+  npx claude-code-map --blast src/lib/db.ts    # Blast radius
   npx claude-code-map @parseArgs               # Look up symbol
 
 Output:
@@ -170,6 +181,7 @@ Output:
   .codemap/routes.md      HTTP routes with methods and auth
   .codemap/schema.md      Database schema (if detected)
   .codemap/types.md       Interfaces, enums, type aliases
+  .codemap/graph.md       Import dependency graph and hot files
 
 Languages:
   TypeScript, JavaScript, TSX, JSX, Python, Go, Rust, Java, C#,
@@ -220,6 +232,8 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Blast radius needs a full scan first — handled after parsing below
+
   // Step 1: Detect framework
   log('[codemap] Detecting framework...');
   const framework = await detectFramework(projectRoot);
@@ -242,7 +256,7 @@ async function main(): Promise<void> {
     ? { changed: files, unchanged: [] }
     : getChangedFiles(files, cache);
 
-  if (changed.length === 0 && !cliArgs.force) {
+  if (changed.length === 0 && !cliArgs.force && cliArgs.action !== 'blast') {
     log('[codemap] All files unchanged. Use --force to re-scan.');
     return;
   }
@@ -256,6 +270,7 @@ async function main(): Promise<void> {
   const allSymbols: ExtractedSymbol[] = [];
   const allRoutes: ExtractedRoute[] = [];
   const allTypes: ExtractedType[] = [];
+  const allImports: ExtractedImport[] = [];
   const parsedFiles: Record<string, ParsedFile> = {};
 
   // Load cached data for unchanged files
@@ -265,7 +280,11 @@ async function main(): Promise<void> {
       allSymbols.push(...cached.symbols);
       allRoutes.push(...cached.routes);
       allTypes.push(...cached.types);
-      parsedFiles[filePath] = cached;
+      if (cached.imports) allImports.push(...cached.imports);
+      parsedFiles[filePath] = {
+        ...cached,
+        imports: cached.imports ?? [],
+      };
     }
   }
 
@@ -282,10 +301,12 @@ async function main(): Promise<void> {
       const symbols = await extractExportsAsync(tree, file.language, file.relativePath);
       const routes = await extractRoutes(tree, file.language, file.relativePath, framework);
       const types = await extractTypes(tree, file.language, file.relativePath);
+      const imports = await extractImports(tree, file.language, file.relativePath);
 
       allSymbols.push(...symbols);
       allRoutes.push(...routes);
       allTypes.push(...types);
+      allImports.push(...imports);
 
       parsedFiles[file.relativePath] = {
         filePath: file.relativePath,
@@ -293,6 +314,7 @@ async function main(): Promise<void> {
         symbols,
         routes,
         types,
+        imports,
       };
     } catch (err) {
       parseErrors++;
@@ -300,8 +322,29 @@ async function main(): Promise<void> {
     }
   }
 
+  // Step 5b: Resolve imports against project file set
+  const projectFileSet = new Set(files.map((f) => f.relativePath));
+  for (const [filePath, parsed] of Object.entries(parsedFiles)) {
+    const resolvedImports = parsed.imports.map((imp) => {
+      if (imp.isExternal || imp.resolvedPath) return imp;
+      const resolved = resolveImport(imp.source, filePath, projectFileSet, imp.language);
+      return resolved ? { ...imp, resolvedPath: resolved, isExternal: false } : imp;
+    });
+    parsedFiles[filePath] = { ...parsed, imports: resolvedImports };
+  }
+
+  // Step 5c: Build import graph
+  const importGraph = buildImportGraph(parsedFiles);
+
   // Step 6: Extract schema
   const models: ExtractedModel[] = await extractSchema(projectRoot, config);
+
+  // Handle --blast action (needs graph + schema, then exits)
+  if (cliArgs.action === 'blast') {
+    const blast = computeBlastRadius(importGraph, cliArgs.blastTarget!, 3, allRoutes, models);
+    console.log(formatBlastRadius(blast));
+    return;
+  }
 
   // Step 7: Build file tree
   const fileTree = buildFileTree(files, projectRoot, framework);
@@ -331,6 +374,11 @@ async function main(): Promise<void> {
     writeFileSync(join(outputDir, 'schema.md'), schemaMd);
   }
 
+  const graphMd = formatGraph(importGraph, parsedFiles);
+  if (graphMd) {
+    writeFileSync(join(outputDir, 'graph.md'), graphMd);
+  }
+
   // Step 9: Write cache
   writeCache(outputDir, files);
   writeCacheData(outputDir, parsedFiles);
@@ -340,10 +388,14 @@ async function main(): Promise<void> {
   const outputFiles = ['structure.md', 'exports.md', 'types.md'];
   if (routesMd) outputFiles.push('routes.md');
   if (schemaMd) outputFiles.push('schema.md');
+  if (graphMd) outputFiles.push('graph.md');
 
   log(`\n[codemap] Done in ${elapsed}s`);
   log(`[codemap] ${files.length} files → ${outputFiles.length} index files in ${config.output}/`);
   log(`[codemap] ${allSymbols.length} exports, ${allRoutes.length} routes, ${allTypes.length} types, ${models.length} models`);
+  if (importGraph.edges.length > 0) {
+    log(`[codemap] ${importGraph.edges.length} internal import edges, ${importGraph.hotFiles.length} connected files`);
+  }
   if (parseErrors > 0) {
     log(`[codemap] ${parseErrors} files had parse errors (skipped)`);
   }

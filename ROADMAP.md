@@ -41,7 +41,7 @@ Thread: https://old.reddit.com/r/ClaudeAI/comments/1sfdztg/90_fewer_tokens_per_s
 - Real tree-sitter AST for all 12 languages (codesight uses regex for non-TS)
 - Symbol lookup (`@Symbol`)
 - Token stats (`--stats`)
-- 109-test suite
+- 153-test suite (19 test files)
 - CC0 license (unambiguous public domain)
 
 **Key community feedback from the thread:**
@@ -84,12 +84,15 @@ claude-code-map/
 │   │   └── csharp.ts
 │   ├── extractors/
 │   │   ├── exports.ts          # Extract exported symbols via AST
+│   │   ├── imports.ts          # Import extraction dispatcher + resolver
 │   │   ├── routes.ts           # Extract HTTP routes (file-based + code-based)
 │   │   ├── schema.ts           # Extract DB schema (Prisma, Django, etc.)
 │   │   └── types.ts            # Extract interfaces/enums/type aliases
+│   ├── graph.ts                # Graph construction, BFS blast radius, hot files ranking
 │   └── formatters/
 │       ├── structure-md.ts     # → .codemap/structure.md
 │       ├── exports-md.ts       # → .codemap/exports.md
+│       ├── graph-md.ts         # → .codemap/graph.md
 │       ├── routes-md.ts        # → .codemap/routes.md (if routes detected)
 │       ├── schema-md.ts        # → .codemap/schema.md (if schema detected)
 │       └── types-md.ts         # → .codemap/types.md
@@ -130,6 +133,7 @@ TypeScript, JavaScript, TSX, JSX, Python, Go, Rust, Java, C#
 - **routes.md** — HTTP routes with methods, auth tags (only if routes detected)
 - **schema.md** — DB schema, compact format (only if schema detected)
 - **types.md** — interfaces, enums, type aliases with fields
+- **graph.md** — import dependency graph, hot files ranking, external deps
 
 ### Collapsing Strategies (proven patterns from ai-codex)
 - Routes: 5+ sub-routes under same prefix → collapse to summary
@@ -180,7 +184,7 @@ Inspired by community feedback from the [origin thread](https://old.reddit.com/r
 - [x] **`--stats` flag**: Shows index file sizes and estimated token counts
 - [x] **`--quiet` / `-q` flag**: Suppresses all output for git hooks and CI
 - [x] **Pre-commit hook fix**: Hook now uses `--quiet` and `|| true` to never block commits
-- [x] **109 tests** across 16 test files
+- [x] **109 tests** across 16 test files (now 153/19 after V2.0)
 
 ## V2 Scope — Import Graph, MCP Server, and Competitive Parity
 
@@ -191,19 +195,20 @@ Driven by competitive analysis of codesight (see Competitive Landscape above). V
 The foundational release. Import graph is a prerequisite for blast radius, hot files, and MCP server tools.
 
 **Features:**
-- [ ] Import extraction via tree-sitter queries for all 12 languages
-- [ ] Import resolution (raw specifier → project-relative path)
-- [ ] Dependency graph construction (adjacency + reverse adjacency)
-- [ ] Hot files ranking (sorted by in-degree / number of dependents)
-- [ ] Blast radius computation (BFS through reverse edges)
-- [ ] New output: `.codemap/graph.md` with hot files table + external deps summary
-- [ ] New CLI flag: `--blast <file>` prints blast radius to stdout
-- [ ] Cache integration: store imports in `cache-data.json`, bump cache version
+- [x] Import extraction via tree-sitter queries for all 12 languages
+- [x] Import resolution (raw specifier → project-relative path)
+- [x] Dependency graph construction (adjacency + reverse adjacency)
+- [x] Hot files ranking (sorted by in-degree / number of dependents)
+- [x] Blast radius computation (BFS through reverse edges)
+- [x] New output: `.codemap/graph.md` with hot files table + external deps summary
+- [x] New CLI flag: `--blast <file>` prints blast radius to stdout
+- [x] Cache integration: store imports in `cache-data.json`, bump cache version
 
 **New files:** `src/extractors/imports.ts`, `src/graph.ts`, `src/formatters/graph-md.ts` + tests
 **Modified files:** `src/types.ts`, `src/cli.ts`, `src/cache.ts`, all 9 `src/queries/*.ts` files
 **New types:** `ExtractedImport`, `ImportEdge`, `ImportGraph`, `HotFile`, `BlastRadius`
 **Dependencies:** None (pure in-memory graph)
+**Test count:** 153 tests across 19 test files
 
 ### V2.1: MCP Server (separate package: `claude-code-map-mcp`, npm 2.1.0)
 

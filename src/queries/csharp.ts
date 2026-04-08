@@ -1,4 +1,4 @@
-import type { ExtractedSymbol, ExtractedType, ExtractedRoute, TypeField, SupportedLanguage } from '../types.ts';
+import type { ExtractedSymbol, ExtractedType, ExtractedRoute, ExtractedImport, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
 import { truncate } from '../utils.ts';
 
@@ -220,5 +220,66 @@ export function parseCsharpEnumBody(bodyText: string): TypeField[] {
   }
 
   return fields;
+}
+
+// --- Import Queries ---
+
+const USING_IDENTIFIER_QUERY = `
+(using_directive
+  (identifier) @import_source)
+`;
+
+const USING_QUALIFIED_QUERY = `
+(using_directive
+  (qualified_name) @import_source)
+`;
+
+export async function extractCsharpImports(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedImport[]> {
+  const imports: ExtractedImport[] = [];
+  const seen = new Set<string>();
+
+  // using System;
+  const identCaptures = await runQuery(language, tree, USING_IDENTIFIER_QUERY);
+  for (const cap of identCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: true, // all C# usings are namespace paths; resolver determines locality later
+          language,
+        });
+      }
+    }
+  }
+
+  // using System.Collections.Generic;
+  const qualCaptures = await runQuery(language, tree, USING_QUALIFIED_QUERY);
+  for (const cap of qualCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: true,
+          language,
+        });
+      }
+    }
+  }
+
+  return imports;
 }
 

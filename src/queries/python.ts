@@ -1,4 +1,4 @@
-import type { ExtractedSymbol, ExtractedType, ExtractedRoute, TypeField, SupportedLanguage } from '../types.ts';
+import type { ExtractedSymbol, ExtractedType, ExtractedRoute, ExtractedImport, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
 import { truncate } from '../utils.ts';
 
@@ -227,5 +227,90 @@ export function parsePythonClassFields(bodyText: string): TypeField[] {
   }
 
   return fields;
+}
+
+// --- Import Queries ---
+
+const IMPORT_QUERY = `
+(import_statement
+  name: (dotted_name) @import_source)
+`;
+
+const FROM_IMPORT_QUERY = `
+(import_from_statement
+  module_name: (dotted_name) @import_source)
+`;
+
+const RELATIVE_IMPORT_QUERY = `
+(import_from_statement
+  module_name: (relative_import) @import_source)
+`;
+
+export async function extractPyImports(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedImport[]> {
+  const imports: ExtractedImport[] = [];
+  const seen = new Set<string>();
+
+  // import os, import os.path
+  const importCaptures = await runQuery(language, tree, IMPORT_QUERY);
+  for (const cap of importCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: !source.startsWith('.'),
+          language,
+        });
+      }
+    }
+  }
+
+  // from os.path import join
+  const fromCaptures = await runQuery(language, tree, FROM_IMPORT_QUERY);
+  for (const cap of fromCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: !source.startsWith('.'),
+          language,
+        });
+      }
+    }
+  }
+
+  // from .module import something
+  const relCaptures = await runQuery(language, tree, RELATIVE_IMPORT_QUERY);
+  for (const cap of relCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: false, // relative imports are always local
+          language,
+        });
+      }
+    }
+  }
+
+  return imports;
 }
 

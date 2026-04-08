@@ -70,4 +70,10 @@ describe('parseArgs', () => {
   it('defaults quiet to false', () => {
     expect(parseArgs(['node', 'script']).quiet).toBe(false);
   });
+
+  it('parses --blast with target file', () => {
+    const result = parseArgs(['node', 'script', '--blast', 'src/lib/db.ts']);
+    expect(result.action).toBe('blast');
+    expect(result.blastTarget).toBe('src/lib/db.ts');
+  });
 });

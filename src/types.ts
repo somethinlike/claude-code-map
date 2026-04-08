@@ -165,6 +165,45 @@ export interface FileNode {
   readonly language?: SupportedLanguage;
 }
 
+// --- Import Extraction ---
+
+export interface ExtractedImport {
+  readonly source: string;              // raw specifier: './utils', 'express', 'os'
+  readonly resolvedPath: string | null; // project-relative path, or null if external
+  readonly filePath: string;            // file this import was found in
+  readonly line: number;
+  readonly isExternal: boolean;
+  readonly language: SupportedLanguage;
+}
+
+// --- Import Graph ---
+
+export interface ImportEdge {
+  readonly from: string; // relative path of importing file
+  readonly to: string;   // relative path of imported file
+}
+
+export interface ImportGraph {
+  readonly edges: readonly ImportEdge[];
+  readonly adjacency: Record<string, readonly string[]>;        // file → what it imports
+  readonly reverseAdjacency: Record<string, readonly string[]>; // file → what imports it
+  readonly hotFiles: readonly HotFile[];
+}
+
+export interface HotFile {
+  readonly filePath: string;
+  readonly importedBy: number; // in-degree
+  readonly imports: number;    // out-degree
+}
+
+export interface BlastRadius {
+  readonly targetFile: string;
+  readonly affectedFiles: readonly string[];
+  readonly depth: number;
+  readonly affectedRoutes: readonly string[];
+  readonly affectedModels: readonly string[];
+}
+
 // --- Parsed Results ---
 
 export interface ParsedFile {
@@ -173,6 +212,7 @@ export interface ParsedFile {
   readonly symbols: readonly ExtractedSymbol[];
   readonly routes: readonly ExtractedRoute[];
   readonly types: readonly ExtractedType[];
+  readonly imports: readonly ExtractedImport[];
 }
 
 // --- Cache ---

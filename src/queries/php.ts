@@ -1,4 +1,4 @@
-import type { ExtractedSymbol, ExtractedType, ExtractedRoute, TypeField, SupportedLanguage } from '../types.ts';
+import type { ExtractedSymbol, ExtractedType, ExtractedRoute, ExtractedImport, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
 import { truncate } from '../utils.ts';
 
@@ -276,4 +276,68 @@ export function parsePhpEnumBody(bodyText: string): TypeField[] {
   }
 
   return fields;
+}
+
+// --- Import Queries ---
+
+const PHP_USE_QUERY = `
+(namespace_use_declaration
+  (namespace_use_clause
+    (qualified_name) @import_source))
+`;
+
+const PHP_INCLUDE_QUERY = `
+(expression_statement
+  (include_expression
+    (string) @import_source))
+`;
+
+export async function extractPhpImports(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedImport[]> {
+  const imports: ExtractedImport[] = [];
+  const seen = new Set<string>();
+
+  // use App\Models\User;
+  const useCaptures = await runQuery(language, tree, PHP_USE_QUERY);
+  for (const cap of useCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: true, // use statements are namespace-based; resolver determines locality later
+          language,
+        });
+      }
+    }
+  }
+
+  // require './foo.php'; include '../bar.php';
+  const includeCaptures = await runQuery(language, tree, PHP_INCLUDE_QUERY);
+  for (const cap of includeCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        const isLocal = source.startsWith('./') || source.startsWith('../');
+        imports.push({
+          source,
+          resolvedPath: null,
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: !isLocal,
+          language,
+        });
+      }
+    }
+  }
+
+  return imports;
 }

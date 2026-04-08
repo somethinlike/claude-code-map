@@ -207,19 +207,52 @@
 
 ---
 
-## 9. Real Project Tests
+## 9. Dependency Graph
 
-### 8.1 page-save (Node CLI)
+### 9.1 Graph Generation
+- [ ] Run `npx claude-code-map --force` in a multi-file TypeScript project
+- [ ] `.codemap/graph.md` file is generated alongside the other output files
+- [ ] File contains a "Hot Files" table with columns: File, Dependents
+- [ ] Hot files are sorted by dependent count (highest first)
+- [ ] Rankings look sensible (shared types/utils files near the top)
+
+### 9.2 External Dependencies
+- [ ] `graph.md` contains an "External Dependencies" section
+- [ ] Node built-ins listed (e.g., `node:fs`, `node:path`)
+- [ ] Third-party packages listed (e.g., `web-tree-sitter`)
+
+### 9.3 Blast Radius -- High-Impact File
+- [ ] Run `npx claude-code-map --blast src/types.ts`
+- [ ] Output shows "Blast radius for src/types.ts"
+- [ ] Lists dependent files grouped by hop (Hop 1, Hop 2, Hop 3)
+- [ ] Hop 1 contains direct importers of types.ts
+- [ ] Hop count does not exceed 3
+
+### 9.4 Blast Radius -- Leaf File
+- [ ] Run `--blast` on a file that nothing imports (e.g., a formatter or test file)
+- [ ] Output shows few or no dependents
+- [ ] Clean exit, no crash
+
+### 9.5 Blast Radius -- Nonexistent File
+- [ ] Run `--blast src/does-not-exist.ts`
+- [ ] Graceful error message, not a stack trace
+- [ ] Exit code 1
+
+---
+
+## 10. Real Project Tests
+
+### 10.1 page-save (Node CLI)
 - [ ] Run against `C:\Users\somet\Projects\page-save`
 - [ ] Detects Generic framework
 - [ ] Extracts exports from server.ts, types.ts, file-writer.ts
 
-### 8.2 logoslens (Astro + React)
+### 10.2 logoslens (Astro + React)
 - [ ] Run against `C:\Users\somet\Projects\logoslens`
 - [ ] Detects Astro framework
 - [ ] Extracts exports and types
 
-### 8.3 OEB-Ministry (Next.js + Prisma)
+### 10.3 OEB-Ministry (Next.js + Prisma)
 - [ ] Run against `C:\Users\somet\Projects\OEB-Ministry`
 - [ ] Detects Next.js framework
 - [ ] Generates routes.md and schema.md
