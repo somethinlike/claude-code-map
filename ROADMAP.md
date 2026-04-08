@@ -19,8 +19,37 @@ Claude Code spends 30-50K tokens at the start of every conversation exploring pr
 | Cymbal | tree-sitter | 24 languages | **No license** | Can't legally use |
 | TheBrain | Regex | 9 languages | **GPL-3.0** | Copyleft |
 | jCodeMunch | tree-sitter | 35+ languages | **Paid commercial** | $79-$2,249 |
+| codesight | TS Compiler API + regex | 13+ languages | Unknown | MCP server, blast radius, wiki articles — but regex for non-TS |
 
-`claude-code-map` fills the gap: **MIT-licensed, tree-sitter AST, polyglot, zero-config, npx-ready.**
+`claude-code-map` fills the gap: **CC0-licensed, tree-sitter AST for ALL languages, polyglot, zero-config, npx-ready.**
+
+### codesight Competitive Reference
+
+Thread: https://old.reddit.com/r/ClaudeAI/comments/1sfdztg/90_fewer_tokens_per_session_by_reading_a/
+(106 comments, overwhelmingly positive reception — April 2026)
+
+**What codesight has that we don't (yet):**
+- MCP server mode (8-11 tools: get routes, schema, blast radius, hot files, live scan, refresh)
+- Import graph / blast radius analysis
+- Progressive article loading (200-token index → domain articles on demand)
+- Auto-CLAUDE.md injection (`--profile claude-code`)
+- Watch mode (`--watch`)
+- Interactive HTML report (`--open`)
+- Broader framework detection (NestJS, Nuxt, SvelteKit, Laravel, Rails, Phoenix)
+
+**What we have that codesight doesn't:**
+- Real tree-sitter AST for all 12 languages (codesight uses regex for non-TS)
+- Symbol lookup (`@Symbol`)
+- Token stats (`--stats`)
+- 109-test suite
+- CC0 license (unambiguous public domain)
+
+**Key community feedback from the thread:**
+- Monorepo scaling is a real problem — relevance filtering needed
+- MCP vs CLI debate: both should exist (codesight ships both)
+- Import graph / dependency analysis is highly requested
+- Progressive disclosure saves tokens but adds complexity
+- Monorepo with many contributors: `.gitignore` the output or use MCP mode to avoid merge conflicts
 
 ## Architecture
 
@@ -153,13 +182,76 @@ Inspired by community feedback from the [origin thread](https://old.reddit.com/r
 - [x] **Pre-commit hook fix**: Hook now uses `--quiet` and `|| true` to never block commits
 - [x] **109 tests** across 16 test files
 
-## V2 Scope (Future)
+## V2 Scope — Import Graph, MCP Server, and Competitive Parity
 
-- Watch mode (`--watch`) with file system watcher for real-time re-indexing
-- MCP server mode — native Claude tool integration, no Bash calls
-- More languages: Swift, Elixir, Dart, Lua
-- Monorepo support (scan multiple packages, per-package output)
-- Configurable language subset (don't download all WASM grammars)
+Driven by competitive analysis of codesight (see Competitive Landscape above). V2 closes the feature gap while preserving our AST correctness advantage.
+
+### V2.0: Import Graph & Blast Radius (npm 2.0.0)
+
+The foundational release. Import graph is a prerequisite for blast radius, hot files, and MCP server tools.
+
+**Features:**
+- [ ] Import extraction via tree-sitter queries for all 12 languages
+- [ ] Import resolution (raw specifier → project-relative path)
+- [ ] Dependency graph construction (adjacency + reverse adjacency)
+- [ ] Hot files ranking (sorted by in-degree / number of dependents)
+- [ ] Blast radius computation (BFS through reverse edges)
+- [ ] New output: `.codemap/graph.md` with hot files table + external deps summary
+- [ ] New CLI flag: `--blast <file>` prints blast radius to stdout
+- [ ] Cache integration: store imports in `cache-data.json`, bump cache version
+
+**New files:** `src/extractors/imports.ts`, `src/graph.ts`, `src/formatters/graph-md.ts` + tests
+**Modified files:** `src/types.ts`, `src/cli.ts`, `src/cache.ts`, all 9 `src/queries/*.ts` files
+**New types:** `ExtractedImport`, `ImportEdge`, `ImportGraph`, `HotFile`, `BlastRadius`
+**Dependencies:** None (pure in-memory graph)
+
+### V2.1: MCP Server (separate package: `claude-code-map-mcp`, npm 2.1.0)
+
+Ships as a **separate npm package** to keep the core CLI zero-bloat.
+
+**8 MCP tools:**
+| Tool | Input | Returns |
+|------|-------|---------|
+| `codemap_get_structure` | none | structure.md content |
+| `codemap_get_exports` | `{ file?, kind? }` | filtered exports |
+| `codemap_get_routes` | `{ method?, prefix? }` | filtered routes |
+| `codemap_get_types` | `{ file? }` | filtered types |
+| `codemap_get_schema` | none | schema content |
+| `codemap_get_graph` | none | graph.md content |
+| `codemap_get_blast_radius` | `{ file, depth? }` | blast radius analysis |
+| `codemap_refresh` | none | re-scan changed files, rebuild |
+
+**Architecture:** Long-lived stdio process. Parses once at startup, serves from memory. `codemap_refresh` re-runs delta detection.
+**Package:** `claude-code-map-mcp` — deps: `claude-code-map` (peer), `@modelcontextprotocol/sdk`, `zod`
+**Core package changes:** Export extraction pipeline functions via `package.json` `"exports"` field
+
+### V2.2: Developer Experience (npm 2.2.0)
+
+- [ ] `--init` flag: auto-inject codemap instructions into CLAUDE.md (create or append)
+- [ ] `index.md` progressive index: ~200-token summary table listing each output file with content description and token estimate
+- [ ] CLAUDE.md stanza references `index.md` as the entry point
+
+**New files:** `src/init.ts`, `src/formatters/index-md.ts` + tests
+
+### V2.3: Watch Mode + Languages (npm 2.3.0)
+
+- [ ] `--watch` mode using `node:fs.watch(root, { recursive: true })` with 300ms debounce
+- [ ] New languages: Swift (`.swift`), Elixir (`.ex`/`.exs`), Dart (`.dart`)
+- [ ] Broader framework detection: NestJS, Nuxt, SvelteKit, Laravel, Rails, Spring Boot, Phoenix
+- [ ] Monorepo workspace detection (pnpm/npm workspaces, per-package output)
+
+### V2 Build Order (V2.0 detail)
+
+1. Types (`types.ts`) — new interfaces
+2. TS import query (`queries/typescript.ts`) — validate approach
+3. Import resolution (`extractors/imports.ts`) — resolveImport() + dispatcher
+4. Remaining language import queries (8 files)
+5. Graph module (`graph.ts`) — build, BFS, hotFiles
+6. Graph formatter (`formatters/graph-md.ts`)
+7. Wire into CLI (`cli.ts`) — --blast, pipeline integration, write graph.md
+8. Bump cache version (`cache.ts`)
+9. Tests across all new modules
+10. Update docs (ROADMAP, README, CLAUDE.md, MANUAL-TESTS.md)
 
 ## Implementation Sequence
 
