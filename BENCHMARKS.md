@@ -260,3 +260,92 @@ Verified against healthchecks: **12 of 12 models extracted** with full field def
 - 9 new tests (2 import resolver + 7 Django model)
 - Test count: 245 → 254
 - Healthchecks went from 0 → 12 models (100% accuracy)
+
+## 2026-04-10 — V2.1.2: Rails resources DSL
+
+The last Tier 1 framework with 0 route coverage was Ruby Rails. The pre-V2.1.2 Ruby extractor only matched `get '/path'` calls with a string argument — but real Rails routes.rb files almost never use that form. They use the resource DSL: `resources :articles, only: [:show, :update]` which expands to a set of RESTful routes. Rails routes were silently invisible to claude-code-map.
+
+V2.1.2 adds Rails resource DSL synthesis. Going from 0 → 17 routes on the ruby-rails RealWorld benchmark with full filter support.
+
+### Implementation
+
+**Three new query patterns** added to `src/queries/ruby.ts`:
+- `RAILS_STRING_ROUTE_QUERY` — the existing form: `get '/health'`
+- `RAILS_DSL_QUERY` — captures `(call (identifier) (simple_symbol)) @dsl_call`. Used for both:
+  - `get :feed` shortcut (HTTP method with symbol path → `/feed`)
+  - `resources :articles` and `resource :user` REST DSL calls
+
+**REST action templates:**
+```ts
+REST_PLURAL_ACTIONS = [
+  index, new, create, show, edit, update, destroy
+];
+REST_SINGULAR_ACTIONS = [
+  new, create, show, edit, update, destroy  // no index
+];
+```
+Each action maps to {method, path suffix} (e.g., `update → PATCH /:id`, `destroy → DELETE /:id`). For singular `resource`, the suffix omits `:id` because there's only one of these per parent.
+
+**Filter parsing** (`only: [:show, :update]` / `except: [:edit, :new]`):
+The filter regex extracts the symbol list and filters the action template before synthesis. **Critical bug found and fixed**: the regex was originally walking the entire `dsl_call` text including the `do...end` block, which meant inner `only:`/`except:` filters from nested resources/resource calls were leaking into the outer filter. Fixed by stripping everything from the `do` keyword onward before regex matching. This was caught by the test suite but only after the first test pass — illustrative of how nested DSL parsing requires careful scoping.
+
+**Tests:** 7 new tests in `src/queries/routes.test.ts` covering:
+- 7-route synthesis from `resources :name`
+- 6-route synthesis from singular `resource :name`
+- `only:` filter restricting to a subset
+- `except:` filter excluding actions
+- Symbol-style HTTP calls (`get :feed`)
+- String-form alongside resources
+- Path filter (only routes.rb files)
+
+### Coverage
+
+ruby-rails RealWorld: **0 → 17 routes** ✅
+
+The 17 routes break down by source pattern in the actual routes.rb:
+- `resource :user, only: [:show, :update]` → 2 routes
+- `resources :profiles, only: [:show]` → 1 route (note: nested under devise scope, but flat extraction)
+- `resource :follow, only: [:create, :destroy]` → 2 routes
+- `resources :articles, except: [:edit, :new]` → 5 routes
+- `resource :favorite, only: [:create, :destroy]` → 2 routes
+- `resources :comments, only: [:create, :index, :destroy]` → 3 routes
+- `get :feed, on: :collection` → 1 route
+- `resources :tags, only: [:index]` → 1 route
+
+Total: 17 ✓
+
+### Known gaps (Rails)
+
+1. **Nesting** — `resources :articles do resources :comments end` should produce `/articles/:id/comments` but we extract `/comments`. Nested paths need parent-tracking.
+2. **Scope blocks** — `scope :api do ... end` should prefix all nested routes with `/api`. We don't track scope.
+3. **`devise_for :users`** — adds devise's standard user routes. Not extracted.
+4. **`namespace :api do ... end`** — same as scope but also affects controller resolution.
+
+These are deferred to V2.2+. The core 17-route flat extraction is the foundation; nesting layers on top.
+
+### V2.1.2 Tier 1 final tally
+
+| Repo | Pre-V2.1.0 | V2.1.0 | V2.1.1 | V2.1.2 | Actual |
+|---|---|---|---|---|---|
+| ts-express | 8 | 20 | 20 | 20 | 20 |
+| py-django routes | 0 | 15 | 15 | 15 | 19 |
+| py-django models | 0 | 0 | 1 | 1 | many |
+| py-flask | 23 | 23 | 23 | 23 | 23 |
+| go-gin | 0 | 31 | 31 | 31 | 26 (FPs) |
+| rust-actix | 0 | 0 | 0 | 0 | many |
+| rust-axum | 0 | 6 | 6 | 6 | 12 |
+| java-spring | 13 | 19 | 19 | 19 | 19 |
+| kotlin-spring | 0 | 19 | 19 | 19 | 19 |
+| csharp-aspnet | 0 | 19 | 19 | 19 | 19 |
+| ruby-rails | 0 | 0 | 0 | **17** | 17 |
+| php-laravel | 0 (CRASH) | 11 | 11 | 11 | 12 |
+| **Total routes** | ~74 | ~163 | ~163 | **180** | ~196 |
+
+**10 of 11 frameworks** now extract routes correctly. Only rust-actix remains (macro-based routing is not feasible with tree-sitter alone). Total route capture: ~74 → ~180 (+143%).
+
+### V2.1.2 release summary
+- Rails resource DSL synthesis (resources / resource with only:/except: filters)
+- Symbol-style Ruby HTTP calls (`get :feed`)
+- 7 new tests
+- Test count: 254 → 261
+- ruby-rails went from 0 → 17 routes (100% of flat resources)

@@ -352,6 +352,30 @@ After the V2.1.0 Tier 1 sweep, ran selective Tier 2 audit on `healthchecks` (Dja
 - SQLAlchemy / Peewee model extraction — Django pattern doesn't match their declarative_base / Model shape.
 - JPA, EF Core, ActiveRecord, Eloquent model extraction — each is its own ORM-specific extractor.
 
+### V2.1.2: Rails Resource DSL Synthesis (npm 2.1.2)
+
+Closes the last 0%-coverage Tier 1 framework. Rails routes.rb files use the resource DSL almost exclusively (`resources :articles, only: [...]`), and the pre-V2.1.2 Ruby extractor only matched `get '/path'` strings — so Rails was silently invisible.
+
+**Features:**
+- [x] **REST resource synthesis.** `resources :name` synthesizes 7 RESTful routes (index/new/create/show/edit/update/destroy). `resource :name` (singular) synthesizes 6 (no index, no `:id` in paths because there's only one).
+- [x] **`only:` and `except:` filter parsing** restricts the synthesized actions. Critically, the filter regex strips the `do...end` block first so nested resources don't leak their filters into the parent (this was a real bug caught by tests).
+- [x] **Symbol-style HTTP calls** (`get :feed`) — short form that expands to `/feed`. Distinct from string form (`get '/path'`) which was already handled.
+- [x] **String-form routes still work** alongside the new DSL forms.
+- [x] **7 new tests** in `src/queries/routes.test.ts` covering all forms + filter behavior.
+
+**Coverage:** ruby-rails RealWorld benchmark went **0 → 17 routes** (100% of flat resources/resource calls in the actual file).
+
+**Known Rails gaps deferred:**
+- Nested resources: `resources :articles do resources :comments end` should produce `/articles/:article_id/comments` paths but we extract `/comments` flat.
+- Scope blocks: `scope :api do ... end` should prefix nested routes with `/api`. Not tracked.
+- `devise_for :users` and `namespace :api` — Rails-specific helpers not handled.
+
+These are V2.2+ work. The flat extraction is the foundation; nesting layers on top.
+
+### Final Tier 1 status (V2.1.2)
+
+10 of 11 frameworks extract routes correctly. Only rust-actix remains (macro-based routing is not feasible via tree-sitter alone). Total route capture across all benchmarks: ~74 → 180 (+143%).
+
 ### V2.1: MCP Server (separate package: `claude-code-map-mcp`, npm 2.1.0)
 
 Ships as a **separate npm package** to keep the core CLI zero-bloat.

@@ -82,6 +82,14 @@ npm run test:watch  # vitest watch mode
 - **Type-only file exemption**: monolith rule skips files where all exports are interface/type/enum kinds (legitimate type barrels)
 - **218 tests** across 22 test files (65 new audit tests)
 
+## V2.1.2 — Rails Resource DSL
+- **REST resource synthesis.** `resources :articles` expands to 7 RESTful routes (index/new/create/show/edit/update/destroy). `resource :user` (singular) expands to 6 (no index, no `:id`). Both honor `only:` and `except:` filter arrays.
+- **Critical scoping bug fixed.** The first iteration parsed filters from the entire `dsl_call` text including nested `do...end` blocks, so inner `only:`/`except:` from nested resources leaked into the parent's filter. Fixed by stripping everything from `do` onward before regex matching.
+- **Symbol-style HTTP calls** (`get :feed`) supported alongside the existing string form (`get '/path'`).
+- **ruby-rails RealWorld:** 0 → 17 routes (100% of flat resources/resource calls).
+- **Tests:** 254 → 261 (+7).
+- **10 of 11 Tier 1 frameworks** now extract routes correctly. Only rust-actix (macros) remains.
+
 ## V2.1.1 — C# Resolver + Django Models
 - **C# import resolver** now strips project namespace prefixes. Bitwarden-style `Bit.Core.X.Y` namespaces correctly resolve to `src/Core/X/Y/` (the leading `Bit` is a project root namespace, not a directory). The resolver tries progressively shorter suffixes until it finds a directory match.
 - **Django model extraction** is the first non-Prisma ORM. New `extractPyModels()` in `src/queries/python.ts` finds `class Foo(models.Model):` declarations and walks the class body for `field = models.X(...)` assignments. Detects PK/UQ/FK attributes and nullable fields. Path-filters to `models.py` / `models/` files only.

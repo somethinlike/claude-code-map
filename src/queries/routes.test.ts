@@ -8,6 +8,7 @@ import { extractJavaRoutes } from './java.ts';
 import { extractKotlinRoutes } from './kotlin.ts';
 import { extractCsharpRoutes } from './csharp.ts';
 import { extractPhpRoutes } from './php.ts';
+import { extractRubyRoutes } from './ruby.ts';
 
 beforeAll(async () => {
   await initParser();
@@ -445,5 +446,111 @@ class RealModel(models.Model):
     const models = await extractPyModels(tree, 'python', 'app/models.py');
     expect(models).toHaveLength(1);
     expect(models[0].name).toBe('RealModel');
+  });
+});
+
+// --- Ruby / Rails routes ---
+
+describe('extractRubyRoutes — Rails resources DSL (V2.1.1 new feature)', () => {
+  it('synthesizes 7 RESTful routes from `resources :name`', async () => {
+    const src = `
+Rails.application.routes.draw do
+  resources :articles
+end
+    `;
+    const tree = await parseSource(src, 'ruby');
+    const routes = await extractRubyRoutes(tree, 'ruby', 'config/routes.rb');
+    expect(routes).toHaveLength(7);
+    const sigs = routes.map((r) => `${r.method} ${r.path}`).sort();
+    expect(sigs).toContain('GET /articles');
+    expect(sigs).toContain('GET /articles/:id');
+    expect(sigs).toContain('GET /articles/:id/edit');
+    expect(sigs).toContain('GET /articles/new');
+    expect(sigs).toContain('POST /articles');
+    expect(sigs).toContain('PATCH /articles/:id');
+    expect(sigs).toContain('DELETE /articles/:id');
+  });
+
+  it('synthesizes 6 routes from `resource :name` (singular, no index)', async () => {
+    const src = `
+Rails.application.routes.draw do
+  resource :user
+end
+    `;
+    const tree = await parseSource(src, 'ruby');
+    const routes = await extractRubyRoutes(tree, 'ruby', 'config/routes.rb');
+    expect(routes).toHaveLength(6);
+    const sigs = routes.map((r) => `${r.method} ${r.path}`).sort();
+    expect(sigs).toContain('GET /user');         // show (no :id for singular)
+    expect(sigs).toContain('GET /user/edit');
+    expect(sigs).toContain('POST /user');
+    expect(sigs).toContain('PATCH /user');
+    expect(sigs).toContain('DELETE /user');
+    expect(sigs).not.toContain('GET /users');    // no index for singular
+  });
+
+  it('respects `only:` filter', async () => {
+    const src = `
+Rails.application.routes.draw do
+  resources :tags, only: [:index]
+end
+    `;
+    const tree = await parseSource(src, 'ruby');
+    const routes = await extractRubyRoutes(tree, 'ruby', 'config/routes.rb');
+    expect(routes).toHaveLength(1);
+    expect(routes[0].method).toBe('GET');
+    expect(routes[0].path).toBe('/tags');
+  });
+
+  it('respects `except:` filter', async () => {
+    const src = `
+Rails.application.routes.draw do
+  resources :articles, except: [:edit, :new]
+end
+    `;
+    const tree = await parseSource(src, 'ruby');
+    const routes = await extractRubyRoutes(tree, 'ruby', 'config/routes.rb');
+    expect(routes).toHaveLength(5);
+    const handlers = routes.map((r) => r.handler).sort();
+    expect(handlers).toEqual(['create', 'destroy', 'index', 'show', 'update']);
+  });
+
+  it('extracts symbol-style HTTP method calls (`get :feed`)', async () => {
+    const src = `
+Rails.application.routes.draw do
+  get :feed
+  post :subscribe
+end
+    `;
+    const tree = await parseSource(src, 'ruby');
+    const routes = await extractRubyRoutes(tree, 'ruby', 'config/routes.rb');
+    expect(routes.length).toBeGreaterThanOrEqual(2);
+    expect(routes.some((r) => r.method === 'GET' && r.path === '/feed')).toBe(true);
+    expect(routes.some((r) => r.method === 'POST' && r.path === '/subscribe')).toBe(true);
+  });
+
+  it('extracts string-style routes alongside resources', async () => {
+    const src = `
+Rails.application.routes.draw do
+  get '/health', to: 'monitoring#health'
+  resources :tags, only: [:index]
+end
+    `;
+    const tree = await parseSource(src, 'ruby');
+    const routes = await extractRubyRoutes(tree, 'ruby', 'config/routes.rb');
+    expect(routes.length).toBeGreaterThanOrEqual(2);
+    expect(routes.some((r) => r.path === '/health')).toBe(true);
+    expect(routes.some((r) => r.path === '/tags')).toBe(true);
+  });
+
+  it('only runs on routes.rb files', async () => {
+    const src = `
+class FoosController < ApplicationController
+  resources :widgets
+end
+    `;
+    const tree = await parseSource(src, 'ruby');
+    const routes = await extractRubyRoutes(tree, 'ruby', 'app/controllers/foos_controller.rb');
+    expect(routes).toHaveLength(0);
   });
 });
