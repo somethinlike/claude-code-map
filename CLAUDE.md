@@ -82,6 +82,11 @@ npm run test:watch  # vitest watch mode
 - **Type-only file exemption**: monolith rule skips files where all exports are interface/type/enum kinds (legitimate type barrels)
 - **218 tests** across 22 test files (65 new audit tests)
 
+## V2.0.4 — Re-export Graph Fix
+- **TypeScript import extractor now captures re-exports.** `export * from './x.ts'` and `export { Foo } from './x.ts'` were previously invisible to `extractTsImports` because the queries only matched `import_statement` nodes. The new `EXPORT_FROM_QUERY` matches `(export_statement source: (string))` and runs alongside the three existing import queries.
+- **`parseSource(source, language)`** in `src/parser.ts` is the new test seam — parses an in-memory string into a tree without touching disk. `parseFile` now wraps it.
+- **226 tests** (218 + 8 new re-export tests in `src/queries/typescript.test.ts`).
+
 ## V2.0.3 Architecture — types.ts Decomposition
 - **`src/types.ts` is now a 13-line `export *` barrel.** The actual type
   definitions live in `src/types/<domain>.ts` (one file per domain). New

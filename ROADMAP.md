@@ -263,9 +263,30 @@ The first thing the V2.0.2 audit feature found when run against this project was
 - [x] **`AUDIT_ENTRY_POINT_PATTERNS` regex extended** from `types\.(ts|d\.ts)$` to `types(\.ts|\/)` so the whole declarative type zone is exempt from dead-file/unused-export rules.
 - [x] **`cli.ts` removes stale `audit.md`** when findings drop to zero, instead of leaving the previous report on disk for consumers to read. Bug exposed by this very refactor.
 
-**New finding:** the import graph extractor also fails to count `export * from './x.ts'` as an import edge — the import queries operate on `import_statement` nodes, not `export_statement`. The barrel's links to its per-domain files are invisible to the graph. Filed as a future feature gap; for this refactor, the per-domain files have in-degree ≥1 from internal cross-references so they don't trip dead-file regardless.
+**New finding:** the import graph extractor also fails to count `export * from './x.ts'` as an import edge — the import queries operate on `import_statement` nodes, not `export_statement`. The barrel's links to its per-domain files are invisible to the graph. (Fixed in V2.0.4.)
 
 **Verification:** typecheck clean (was 4 pre-existing errors), 218/218 tests pass, audit produces 0 findings.
+
+### V2.0.4: Fix Re-Export Graph Blindness (npm 2.0.4)
+
+A bug surfaced by the V2.0.3 decomposition: the TypeScript import extractor's tree-sitter queries matched `import_statement` nodes only, so `export * from './x.ts'` and `export { Foo } from './x.ts'` re-exports never registered as edges in the dependency graph. Barrel files appeared to import nothing — the links from `src/types.ts` to its 13 per-domain files were invisible to `graph.md` and to blast-radius analysis.
+
+This is the same shape of AST-query bug as the Java `annotation` vs `marker_annotation` lesson in V1.1: tree-sitter queries are subtree shape matchers, not concept matchers. A query for "all imports" has to enumerate every grammar production that participates in the concept, not just the obvious one.
+
+**Changes:**
+- [x] **`EXPORT_FROM_QUERY`** added to `src/queries/typescript.ts`. Matches `(export_statement source: (string) @import_source)` — captures wildcard re-exports (`export * from`), named re-exports (`export { Foo } from`), and type-only re-exports (`export type * from`).
+- [x] **`extractTsImports`** runs the new query alongside the three existing import queries (ES imports, `require()`, dynamic `import()`). The dedup `Set` already handles overlap with regular imports.
+- [x] **`parseSource(source, language)`** helper extracted from `parseFile` in `src/parser.ts` so tests can parse in-memory strings without writing temp files. `parseFile` is now a thin wrapper around `parseSource` + `readFileSync`.
+- [x] **8 new tests** in `src/queries/typescript.test.ts` covering all re-export forms: wildcard, named, aliased, type-only, dedup with regular imports, external bare specifiers. Plus 2 regression tests confirming the audit's intentional blindness — `extractTsExports` still returns 0 for re-export-only files (the property that makes barrel files invisible to the monolith rule).
+
+**Impact on the codemap of the project itself:**
+- Internal edges: 117 → 130 (+13, exactly matching the 13 `export *` lines in `src/types.ts`)
+- Files with imports: 41 → 47 (+6, the 13 per-domain type files now correctly show their internal cross-references)
+- `src/types.ts` graph row: `30 | 0` → `30 | 13` (the barrel now correctly reports its 13 outgoing dependencies)
+
+**Verification:** typecheck clean, 226/226 tests pass (218 + 8 new), audit still 0 findings.
+
+**Out of scope:** the equivalent fix for Rust (`pub use crate::module::Foo`) and any other languages with re-export idioms. Filed as future work; TypeScript was the surfaced bug because of how common barrel files are in TS projects.
 
 ### V2.1: MCP Server (separate package: `claude-code-map-mcp`, npm 2.1.0)
 

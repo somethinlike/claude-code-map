@@ -77,22 +77,24 @@ async function loadLanguage(language: SupportedLanguage): Promise<Language> {
   return lang;
 }
 
-export async function parseFile(filePath: string, language: SupportedLanguage): Promise<Tree | null> {
+export async function parseSource(source: string, language: SupportedLanguage): Promise<Tree> {
   if (!ParserClass) throw new Error('Parser not initialized. Call initParser() first.');
 
   const lang = await loadLanguage(language);
   const parser = new ParserClass();
   parser.setLanguage(lang);
 
+  return parser.parse(source);
+}
+
+export async function parseFile(filePath: string, language: SupportedLanguage): Promise<Tree | null> {
   let source: string;
   try {
     source = readFileSync(filePath, 'utf-8');
   } catch {
     return null;
   }
-
-  const tree = parser.parse(source);
-  return tree;
+  return parseSource(source, language);
 }
 
 export async function getLanguage(language: SupportedLanguage): Promise<Language> {

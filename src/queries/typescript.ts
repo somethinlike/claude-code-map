@@ -378,6 +378,16 @@ const ES_IMPORT_QUERY = `
   source: (string) @import_source)
 `;
 
+// Re-exports forward symbols from another module without declaring them
+// locally. They participate in the dependency graph just like imports —
+// barrel files (export * from './x') would otherwise be invisible to
+// the graph extractor because the parent node is export_statement, not
+// import_statement.
+const EXPORT_FROM_QUERY = `
+(export_statement
+  source: (string) @import_source)
+`;
+
 const REQUIRE_QUERY = `
 (call_expression
   function: (identifier) @_func
@@ -410,6 +420,25 @@ export async function extractTsImports(
         imports.push({
           source,
           resolvedPath: null, // resolved later by the import resolver
+          filePath,
+          line: cap.startRow + 1,
+          isExternal: !source.startsWith('.') && !source.startsWith('@/'),
+          language,
+        });
+      }
+    }
+  }
+
+  // Re-exports: export * from './bar' / export { foo } from './bar' / export type * from './bar'
+  const reexportCaptures = await runQuery(language, tree, EXPORT_FROM_QUERY);
+  for (const cap of reexportCaptures) {
+    if (cap.name === 'import_source') {
+      const source = cap.text.replace(/['"]/g, '');
+      if (!seen.has(source)) {
+        seen.add(source);
+        imports.push({
+          source,
+          resolvedPath: null,
           filePath,
           line: cap.startRow + 1,
           isExternal: !source.startsWith('.') && !source.startsWith('@/'),
