@@ -23,6 +23,7 @@ const mockParsedFiles: Record<string, ParsedFile> = {
     types: [
       { name: 'AuthConfig', kind: 'interface', fields: [], filePath: 'src/auth.ts', line: 1, isExported: true, language: 'typescript' },
     ],
+    imports: [],
   },
   'src/utils.ts': {
     filePath: 'src/utils.ts',
@@ -34,6 +35,7 @@ const mockParsedFiles: Record<string, ParsedFile> = {
     types: [
       { name: 'DateFormat', kind: 'type', fields: [], filePath: 'src/utils.ts', line: 10, isExported: true, language: 'typescript' },
     ],
+    imports: [],
   },
 };
 
