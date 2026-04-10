@@ -11,7 +11,7 @@ import { loadCache, getChangedFiles, writeCache, writeCacheData, loadCacheData }
 import { extractExportsAsync } from './extractors/exports.ts';
 import { extractTypes } from './extractors/type-info.ts';
 import { extractRoutes } from './extractors/routes.ts';
-import { extractSchema } from './extractors/schema.ts';
+import { extractSchema, extractModels } from './extractors/schema.ts';
 import { formatStructure } from './formatters/structure-md.ts';
 import { formatExports } from './formatters/exports-md.ts';
 import { formatRoutes } from './formatters/routes-md.ts';
@@ -275,6 +275,7 @@ async function main(): Promise<void> {
   const allRoutes: ExtractedRoute[] = [];
   const allTypes: ExtractedType[] = [];
   const allImports: ExtractedImport[] = [];
+  const allPerFileModels: ExtractedModel[] = [];
   const parsedFiles: Record<string, ParsedFile> = {};
 
   // Load cached data for unchanged files
@@ -333,11 +334,13 @@ async function main(): Promise<void> {
       const routes = await extractRoutes(tree, file.language, file.relativePath, framework);
       const types = await extractTypes(tree, file.language, file.relativePath);
       const imports = await extractImports(tree, file.language, file.relativePath);
+      const fileModels = await extractModels(tree, file.language, file.relativePath);
 
       allSymbols.push(...symbols);
       allRoutes.push(...routes);
       allTypes.push(...types);
       allImports.push(...imports);
+      allPerFileModels.push(...fileModels);
 
       parsedFiles[file.relativePath] = {
         filePath: file.relativePath,
@@ -367,8 +370,11 @@ async function main(): Promise<void> {
   // Step 5c: Build import graph
   const importGraph = buildImportGraph(parsedFiles);
 
-  // Step 6: Extract schema
-  const models: ExtractedModel[] = await extractSchema(projectRoot, config);
+  // Step 6: Extract schema. Project-root-level Prisma schemas live in
+  // their own files; per-file models (Django, etc.) were already
+  // gathered during the parsing loop above.
+  const prismaModels = await extractSchema(projectRoot, config);
+  const models: ExtractedModel[] = [...allPerFileModels, ...prismaModels];
 
   // Handle --blast action (needs graph + schema, then exits)
   if (cliArgs.action === 'blast') {

@@ -208,3 +208,55 @@ Total test count: 226 → 245 (+19).
 - 19 new integration tests
 - 9 of 11 RealWorld frameworks now extract routes correctly
 - ~89 additional routes captured per benchmark sweep (+121%)
+
+## 2026-04-10 — Tier 2 audit (V2.1.0 → V2.1.1)
+
+After Tier 1 wrapped, ran selective Tier 2 audit on two medium-large projects to stress-test the V2.1.0 fixes at scale.
+
+### Tier 2 results
+
+| Repo | Files | Time | Routes | Models | Edges | Notes |
+|---|---|---|---|---|---|---|
+| `healthchecks` (Django, 8.5k★) | 683 | 11s | 164 | **0 → 12** | 19 | Django route extraction works at scale; **0 models was a real gap** |
+| `bitwarden-server` (C#, 16k★) | 4423 | **9 min** | 726 | 0 | **4** | C# routes extract well; **import graph nearly empty (4 edges from 4423 files!)** |
+
+### Bugs found and fixed in V2.1.1
+
+**1. C# import resolver — namespace prefix mishandling**
+
+Bitwarden uses `Bit.Core.AdminConsole.Entities` namespaces that map to `src/Core/AdminConsole/Entities/`. The leading `Bit` is a project root namespace, NOT a directory. The pre-V2.1.1 resolver looked for the literal `Bit/Core/AdminConsole/Entities` substring in file paths and found nothing, so the import graph for the entire 4423-file codebase had only 4 edges.
+
+The new resolver tries progressively shorter namespace suffixes — drops the leading segments until it finds a directory match. So `Bit.Core.AdminConsole.Entities` first tries `Bit/Core/AdminConsole/Entities` (fails), then `Core/AdminConsole/Entities` (matches), then returns the first .cs file in that directory. Establishes the dependency edge correctly. Includes a regression test for the bitwarden-style pattern plus a "no false matches on substring overlap" test.
+
+**2. Django model extraction — new feature, fixes the schema gap for ALL Django projects**
+
+Every Tier 1 + Tier 2 Python benchmark showed `0 models` because `extractSchema` only handled Prisma. Real Python projects use Django ORM, SQLAlchemy, Peewee, etc. — none of which were extracted.
+
+V2.1.1 adds `extractPyModels` to the python query module, plus an `extractModels()` per-language dispatcher in `src/extractors/schema.ts` that runs alongside the other per-file extractors during the parse loop. The Django extractor:
+- Finds class declarations whose superclass is `models.Model` (direct subclasses; indirect/abstract base classes are a documented gap)
+- Walks the class body for `field_name = models.SomeField(...)` assignments
+- Extracts field name, field type, and attributes (PK / UQ / FK)
+- Detects required vs nullable from `null=True` / `blank=True` arguments
+- Skips ORM-managed audit columns (`createdAt`/`updatedAt`/etc.) via `ORM_AUDIT_COLUMNS`
+- Path-filters to `models.py` and `models/` directories only — doesn't run the query on every Python file in the project
+
+Verified against healthchecks: **12 of 12 models extracted** with full field definitions (verified by grep count). Schema.md output is rich and useful — shows each model's fields, types, and attributes.
+
+7 new tests in `src/queries/routes.test.ts` covering: basic extraction, PK/UQ/FK attribute detection, required-vs-nullable, ORM_AUDIT_COLUMNS skip, path filtering, multi-model files, non-Django superclass rejection.
+
+### Tier 2 known gaps (not fixed in V2.1.1)
+
+1. **Bitwarden 9-minute scan time** — 4423 files at ~120ms each is dominated by tree-sitter parse + per-file query runs. Cache short-circuits subsequent runs but the first scan is slow at this scale. Filed for later: profiling, possibly parallel parsing.
+
+2. **C# import edges still incomplete after the resolver fix** — needs verification by re-running the bitwarden scan with `--force` to rebuild the graph (the cache short-circuits when nothing has changed file-wise).
+
+3. **No SQLAlchemy/Peewee model extraction yet** — the Django pattern works only for `models.Model` direct subclasses. SQLAlchemy declarative_base() and Peewee Model are different shapes.
+
+4. **No JPA/Hibernate, EF Core, ActiveRecord, or Eloquent model extraction** — each ORM has its own model declaration shape. Filed as future work.
+
+### V2.1.1 release summary
+- C# import resolver fixed for namespace prefix stripping
+- Django model extraction added — first non-Prisma ORM
+- 9 new tests (2 import resolver + 7 Django model)
+- Test count: 245 → 254
+- Healthchecks went from 0 → 12 models (100% accuracy)

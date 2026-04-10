@@ -1,6 +1,7 @@
-import type { ExtractedSymbol, ExtractedType, ExtractedRoute, ExtractedImport, TypeField, SupportedLanguage } from '../types.ts';
+import type { ExtractedSymbol, ExtractedType, ExtractedRoute, ExtractedImport, ExtractedModel, SchemaField, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
 import { truncate } from '../utils.ts';
+import { ORM_AUDIT_COLUMNS } from '../types.ts';
 
 // Python has no export keyword. All top-level definitions are "exported."
 // Names starting with _ are conventionally private.
@@ -49,6 +50,19 @@ const DJANGO_URL_QUERY = `
   function: (identifier) @url_func
   arguments: (argument_list
     (string) @url_path))
+`;
+
+// Django models: class Foo(models.Model): ...
+// Catches direct subclasses of `models.Model`. Indirect subclasses
+// (custom abstract base classes) are a known gap.
+const DJANGO_MODEL_QUERY = `
+(class_definition
+  name: (identifier) @model_name
+  superclasses: (argument_list
+    (attribute
+      object: (identifier) @sup_obj
+      attribute: (identifier) @sup_attr))
+  body: (block) @model_body)
 `;
 
 export async function extractPyExports(
@@ -214,6 +228,81 @@ export async function extractPyRoutes(
   }
 
   return routes;
+}
+
+export async function extractPyModels(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedModel[]> {
+  const models: ExtractedModel[] = [];
+
+  // Skip files that aren't likely to contain Django models. Most Django
+  // projects keep models in models.py (or split them into a models/ directory).
+  // The cheap path-check avoids running the query on every Python file.
+  if (!filePath.endsWith('models.py') && !filePath.includes('/models/')) {
+    return models;
+  }
+
+  const captures = await runQuery(language, tree, DJANGO_MODEL_QUERY);
+  for (let i = 0; i < captures.length; i++) {
+    const cap = captures[i];
+    if (cap.name !== 'model_name') continue;
+
+    const supObj = captures.find((c, j) => j > i && c.name === 'sup_obj');
+    const supAttr = captures.find((c, j) => j > i && c.name === 'sup_attr');
+    if (supObj?.text !== 'models' || supAttr?.text !== 'Model') continue;
+
+    const bodyCap = captures.find((c, j) => j > i && c.name === 'model_body');
+    const fields = bodyCap ? parseDjangoModelFields(bodyCap.text) : [];
+
+    models.push({
+      name: cap.text,
+      fields,
+      filePath,
+      orm: 'django',
+    });
+  }
+
+  return models;
+}
+
+/**
+ * Parse the body of a Django model class to extract field declarations.
+ * Each field looks like: `name = models.CharField(max_length=100, ...)`.
+ * Picks out the field name and the field type (the django field class).
+ */
+export function parseDjangoModelFields(bodyText: string): SchemaField[] {
+  const fields: SchemaField[] = [];
+  const lines = bodyText.split('\n');
+
+  for (const line of lines) {
+    // Pattern: `field_name = models.SomeField(...)` (handles indentation)
+    const match = line.trim().match(/^(\w+)\s*=\s*models\.(\w+)\s*\((.*)\)?/);
+    if (!match) continue;
+    const [, name, fieldType, args = ''] = match;
+    if (ORM_AUDIT_COLUMNS.has(name)) continue;
+
+    const isRelation = /^(ForeignKey|OneToOneField|ManyToManyField)$/.test(fieldType);
+    const isPK = /primary_key\s*=\s*True/.test(args);
+    const isUnique = /unique\s*=\s*True/.test(args);
+    const required = !/null\s*=\s*True/.test(args) && !/blank\s*=\s*True/.test(args);
+
+    const attributes: string[] = [];
+    if (isPK) attributes.push('PK');
+    if (isUnique) attributes.push('UQ');
+    if (isRelation) attributes.push('FK');
+
+    fields.push({
+      name,
+      type: fieldType,
+      required,
+      isRelation,
+      attributes,
+    });
+  }
+
+  return fields;
 }
 
 export function parsePythonClassFields(bodyText: string): TypeField[] {

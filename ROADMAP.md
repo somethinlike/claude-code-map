@@ -334,6 +334,24 @@ Full benchmark notes in `BENCHMARKS.md` Results Log section.
 - Go false positives (~5/26 in gin benchmark — broad `(method) call_expression` matching)
 - Schema extraction for non-Prisma ORMs (Django, Rails AR, Eloquent, JPA, EF, sqlx) — still 0 models on every benchmark
 
+### V2.1.1: Tier 2 Hardening — C# Resolver + Django Models (npm 2.1.1)
+
+After the V2.1.0 Tier 1 sweep, ran selective Tier 2 audit on `healthchecks` (Django, 683 files) and `bitwarden-server` (C#, 4423 files). Two real bugs surfaced; both fixed in V2.1.1.
+
+**Bugs fixed:**
+
+- [x] **C# import resolver missed namespace prefixes.** Bitwarden uses `Bit.Core.X.Y` namespaces that map to `src/Core/X/Y/`. The leading `Bit` is the project root namespace, not a directory. The pre-V2.1.1 resolver looked for the literal `Bit/Core/X/Y` substring and found nothing — bitwarden's 4423-file codebase had only **4 import edges** in graph.md. The new resolver tries progressively shorter suffixes (`Bit/Core/X/Y` → `Core/X/Y` → `X/Y` → `Y`) until it finds a directory match. Two new tests cover the bitwarden-style pattern and a no-false-positives case.
+
+- [x] **Django model extraction (first non-Prisma ORM).** Every Tier 1+2 Python benchmark had `0 models` because schema extraction only handled Prisma. Added `extractPyModels` plus a new per-language `extractModels()` dispatcher that runs alongside other per-file extractors. The Django extractor finds `class Foo(models.Model):` declarations, walks the class body for `field = models.X(...)` assignments, extracts field types and attributes (PK / UQ / FK), and detects nullability from `null=True`/`blank=True` arguments. Path-filters to `models.py` / `models/` directories. 7 new tests. Verified against healthchecks: **12/12 models extracted with full field definitions**.
+
+**New types of work:**
+- The `extractModels()` dispatcher in `src/extractors/schema.ts` parallels `extractRoutes()` etc. — each language can scan its own ORM idioms during the per-file parse loop. Future ORMs (SQLAlchemy, Peewee, JPA, EF, Eloquent, ActiveRecord) plug in here.
+
+**Still deferred:**
+- Bitwarden's 9-minute scan time at 4423 files — first-run perf is dominated by per-file tree-sitter + query overhead. Needs profiling.
+- SQLAlchemy / Peewee model extraction — Django pattern doesn't match their declarative_base / Model shape.
+- JPA, EF Core, ActiveRecord, Eloquent model extraction — each is its own ORM-specific extractor.
+
 ### V2.1: MCP Server (separate package: `claude-code-map-mcp`, npm 2.1.0)
 
 Ships as a **separate npm package** to keep the core CLI zero-bloat.

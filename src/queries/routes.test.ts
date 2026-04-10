@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initParser, parseSource } from '../parser.ts';
 import { extractTsRoutes } from './typescript.ts';
-import { extractPyRoutes } from './python.ts';
+import { extractPyRoutes, extractPyModels } from './python.ts';
 import { extractGoRoutes } from './go.ts';
 import { extractRustRoutes } from './rust.ts';
 import { extractJavaRoutes } from './java.ts';
@@ -326,5 +326,124 @@ Route::get('test', 'C@a');
     // Should not throw — pre-fix this would emit "Bad pattern structure" to stderr
     const routes = await extractPhpRoutes(tree, 'php', 'routes/api.php');
     expect(routes).toHaveLength(1);
+  });
+});
+
+// --- Python / Django models ---
+
+describe('extractPyModels — Django', () => {
+  it('extracts Django model classes with field definitions', async () => {
+    const src = `
+from django.db import models
+
+class Check(models.Model):
+    name = models.CharField(max_length=100, blank=True)
+    code = models.UUIDField(default=uuid.uuid4, unique=True)
+    owner = models.ForeignKey(User, models.CASCADE)
+    desc = models.TextField(blank=True)
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    expect(models).toHaveLength(1);
+    expect(models[0].name).toBe('Check');
+    expect(models[0].orm).toBe('django');
+    const fieldNames = models[0].fields.map((f) => f.name);
+    expect(fieldNames).toContain('name');
+    expect(fieldNames).toContain('code');
+    expect(fieldNames).toContain('owner');
+    expect(fieldNames).toContain('desc');
+  });
+
+  it('flags primary key, unique, and foreign key fields', async () => {
+    const src = `
+class Article(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    slug = models.CharField(max_length=200, unique=True)
+    author = models.ForeignKey(User, models.CASCADE)
+    body = models.TextField()
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    expect(models).toHaveLength(1);
+    const idField = models[0].fields.find((f) => f.name === 'id');
+    const slugField = models[0].fields.find((f) => f.name === 'slug');
+    const authorField = models[0].fields.find((f) => f.name === 'author');
+    expect(idField?.attributes).toContain('PK');
+    expect(slugField?.attributes).toContain('UQ');
+    expect(authorField?.isRelation).toBe(true);
+    expect(authorField?.attributes).toContain('FK');
+  });
+
+  it('marks blank/nullable fields as not required', async () => {
+    const src = `
+class Profile(models.Model):
+    bio = models.TextField(blank=True)
+    avatar = models.URLField(null=True)
+    name = models.CharField(max_length=100)
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    const fields = models[0].fields;
+    expect(fields.find((f) => f.name === 'bio')?.required).toBe(false);
+    expect(fields.find((f) => f.name === 'avatar')?.required).toBe(false);
+    expect(fields.find((f) => f.name === 'name')?.required).toBe(true);
+  });
+
+  it('skips ORM-managed audit columns (createdAt etc.)', async () => {
+    const src = `
+class Article(models.Model):
+    title = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    const fieldNames = models[0].fields.map((f) => f.name);
+    expect(fieldNames).toContain('title');
+    expect(fieldNames).not.toContain('created_at');
+    expect(fieldNames).not.toContain('updated_at');
+  });
+
+  it('only runs on models.py / models/ files (path filter)', async () => {
+    const src = `
+class NotAModel(models.Model):
+    field = models.CharField(max_length=100)
+    `;
+    const tree = await parseSource(src, 'python');
+    // views.py is not a models file — should return 0
+    const models = await extractPyModels(tree, 'python', 'app/views.py');
+    expect(models).toHaveLength(0);
+  });
+
+  it('handles multiple models in one file', async () => {
+    const src = `
+class Check(models.Model):
+    name = models.CharField(max_length=100)
+
+class Channel(models.Model):
+    kind = models.CharField(max_length=20)
+    target = models.CharField(max_length=200)
+
+class Notification(models.Model):
+    error = models.CharField(max_length=200)
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    expect(models).toHaveLength(3);
+    expect(models.map((m) => m.name).sort()).toEqual(['Channel', 'Check', 'Notification']);
+  });
+
+  it('ignores classes with non-models.Model superclasses', async () => {
+    const src = `
+class Helper(BaseClass):
+    field = models.CharField(max_length=100)
+
+class RealModel(models.Model):
+    name = models.CharField(max_length=100)
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    expect(models).toHaveLength(1);
+    expect(models[0].name).toBe('RealModel');
   });
 });

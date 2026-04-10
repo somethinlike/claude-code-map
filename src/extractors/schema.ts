@@ -1,7 +1,29 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ExtractedModel, SchemaField, CodemapConfig } from '../types.ts';
+import type { ExtractedModel, SchemaField, CodemapConfig, SupportedLanguage } from '../types.ts';
 import { ORM_AUDIT_COLUMNS } from '../types.ts';
+import { extractPyModels } from '../queries/python.ts';
+
+/**
+ * Per-file model extraction (Django, future ORMs).
+ *
+ * Routed through this dispatcher (parallel to extractRoutes/extractTypes
+ * etc.) so each language can scan its own ORM idioms during the per-file
+ * parse loop. extractSchema (below) handles the project-root-level
+ * concerns: Prisma schema files and any other single-source-of-truth ORMs.
+ */
+export async function extractModels(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedModel[]> {
+  switch (language) {
+    case 'python':
+      return extractPyModels(tree, language, filePath);
+    default:
+      return [];
+  }
+}
 
 export async function extractSchema(
   projectRoot: string,

@@ -82,6 +82,12 @@ npm run test:watch  # vitest watch mode
 - **Type-only file exemption**: monolith rule skips files where all exports are interface/type/enum kinds (legitimate type barrels)
 - **218 tests** across 22 test files (65 new audit tests)
 
+## V2.1.1 — C# Resolver + Django Models
+- **C# import resolver** now strips project namespace prefixes. Bitwarden-style `Bit.Core.X.Y` namespaces correctly resolve to `src/Core/X/Y/` (the leading `Bit` is a project root namespace, not a directory). The resolver tries progressively shorter suffixes until it finds a directory match.
+- **Django model extraction** is the first non-Prisma ORM. New `extractPyModels()` in `src/queries/python.ts` finds `class Foo(models.Model):` declarations and walks the class body for `field = models.X(...)` assignments. Detects PK/UQ/FK attributes and nullable fields. Path-filters to `models.py` / `models/` files only.
+- **New `extractModels()` dispatcher** in `src/extractors/schema.ts` runs per-file alongside the other extractors. Future ORMs (SQLAlchemy, JPA, EF, Eloquent, ActiveRecord) plug in here.
+- **Tests:** 245 → 254 (+9: 2 import resolver, 7 Django model).
+
 ## V2.1.0 — Route Extraction Hardening
 - **8 route extraction bugs fixed across 7 languages.** First Tier 1
   RealWorld benchmark sweep found that route extraction was broken for

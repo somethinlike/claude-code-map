@@ -277,12 +277,23 @@ function resolveCsharpImport(
   projectFiles: Set<string>,
 ): string | null {
   // C# using directives are namespace-based, not direct file mappings.
-  // Best effort: namespace segments may match directory structure.
-  const pathPart = specifier.replace(/\./g, '/');
-
-  for (const file of projectFiles) {
-    if (file.endsWith('.cs') && file.includes(pathPart)) {
-      return file;
+  // Conventionally a namespace mirrors the directory structure, but real
+  // codebases prefix with a project name (Bit.Core.* → src/Core/*) so we
+  // try progressively shorter suffixes — drop leading segments until we
+  // find a directory that exists. Picks the first file in that namespace
+  // folder to establish the dependency edge.
+  const segments = specifier.split('.');
+  for (let i = 0; i < segments.length; i++) {
+    const suffix = segments.slice(i).join('/');
+    if (!suffix) continue;
+    for (const file of projectFiles) {
+      if (!file.endsWith('.cs')) continue;
+      // Pad with leading "/" so we can match the suffix at the start of
+      // the path the same way as in the middle.
+      const padded = '/' + file;
+      if (padded.includes('/' + suffix + '/') || padded.endsWith('/' + suffix + '.cs')) {
+        return file;
+      }
     }
   }
 

@@ -178,4 +178,27 @@ describe('resolveImport — C#', () => {
     const result = resolveImport('Models', 'Program.cs', csFiles, 'csharp');
     expect(result).toBe('Models/User.cs');
   });
+
+  it('strips project namespace prefix and matches the directory suffix (V2.1.1 fix)', () => {
+    // bitwarden-style: namespace `Bit.Core.AdminConsole.Entities` lives at
+    // `src/Core/AdminConsole/Entities/`. The leading `Bit` is the project
+    // root namespace, NOT a directory. The resolver tries progressively
+    // shorter suffixes and matches `Core/AdminConsole/Entities`.
+    const bitFiles = new Set([
+      'src/Core/AdminConsole/Entities/Organization.cs',
+      'src/Core/AdminConsole/Models/Data/OrganizationData.cs',
+      'src/Api/Controllers/OrganizationsController.cs',
+    ]);
+    const result = resolveImport('Bit.Core.AdminConsole.Entities', 'Foo.cs', bitFiles, 'csharp');
+    expect(result).toBe('src/Core/AdminConsole/Entities/Organization.cs');
+  });
+
+  it('does not match unrelated files that happen to share a substring', () => {
+    const files = new Set([
+      'src/Core/Entities/User.cs',
+      'src/Tests/EntitiesUserTests.cs',
+    ]);
+    const result = resolveImport('App.Core.Entities', 'Foo.cs', files, 'csharp');
+    expect(result).toBe('src/Core/Entities/User.cs');
+  });
 });
