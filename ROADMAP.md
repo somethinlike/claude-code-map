@@ -210,6 +210,45 @@ The foundational release. Import graph is a prerequisite for blast radius, hot f
 **Dependencies:** None (pure in-memory graph)
 **Test count:** 153 tests across 19 test files
 
+### V2.0.2: Passive Code Audit (npm 2.0.2)
+
+Insight: the index already contains ~90% of what's needed to flag common AI-coding smells. Most AI failure modes are *structural* (junk drawers, monoliths, circular deps, type sprawl, legacy leftovers) — all detectable from the export set + import graph with zero source-reading. Rather than building a separate linter, bolt an opinion-forming pass onto the existing pipeline and emit `.codemap/audit.md` as another byproduct.
+
+**Design principles:**
+- **Passive** — runs automatically during every index pass, no new CLI flag needed
+- **Ranked by heat** — severity × `log10` of import count, so hot files surface first
+- **Opinion-forming, not a linter** — false positives expected; each finding is "look here first", not a verdict
+- **No new data extraction** — rules operate exclusively on data already collected
+
+**Features:**
+- [x] 10 audit rules: junk-drawer, monolith, circular-dependency, layer-violation, duplicated-domain, type-sprawl, legacy-marker, unused-export, dead-file, naming-inconsistency
+- [x] Heat-weighted scoring: severity dominates at low hotness, extreme hotness can promote across tiers
+- [x] Tarjan's SCC algorithm for circular dependency detection
+- [x] Entry-point exemption list (cli/main/index/config files exempt from dead-file rules)
+- [x] Type-only file exemption for monolith rule (types barrels are fine)
+- [x] `.codemap/audit.md` output with Top Priority table + findings grouped by severity
+- [x] Summary line in CLI output: `audit: N findings (critical/high/medium/low)`
+
+**Rule details:**
+| Rule | Trigger | Severity |
+|---|---|---|
+| `junk-drawer` | filename matches `utils\|helpers\|lib\|misc\|common\|shared` AND exports ≥ 5 | critical if ≥ 15, high if ≥ 8, medium otherwise |
+| `monolith` | exports ≥ 15 (excluding type-only files and junk drawers) | critical if ≥ 25, high otherwise |
+| `circular-dependency` | Tarjan's SCC finds a cycle in the import graph | critical |
+| `layer-violation` | `lib/data/db/models/services` imports from `pages/app/components/views/routes` | high |
+| `duplicated-domain` | same exported symbol name in 2+ files (skips framework conventions like `GET`, `loader`) | high |
+| `type-sprawl` | 3+ variants of same root type name (`User`, `UserData`, `IUser`, `UserDto`) | high |
+| `legacy-marker` | file path or export name matches `_old\|_legacy\|_v1\|_v2\|_deprecated\|_backup` | high |
+| `unused-export` | file exports symbols but has 0 incoming edges, not an entry point | medium |
+| `dead-file` | 0 in-edges AND 0 out-edges AND not an entry point | medium |
+| `naming-inconsistency` | ≥ 2 camelCase AND ≥ 2 snake_case exports in one file | low |
+
+**New files:** `src/audit.ts`, `src/audit.test.ts`, `src/formatters/audit-md.ts`, `src/formatters/audit-md.test.ts`
+**Modified files:** `src/types.ts` (added audit types + `AUDIT_ENTRY_POINT_PATTERNS`), `src/cli.ts` (pipeline integration)
+**New types:** `AuditSeverity`, `AuditRuleId`, `AuditFinding`, `AuditReport`
+**Dependencies:** None (pure in-memory analysis)
+**Test count:** 218 tests across 22 test files (65 new)
+
 ### V2.1: MCP Server (separate package: `claude-code-map-mcp`, npm 2.1.0)
 
 Ships as a **separate npm package** to keep the core CLI zero-bloat.

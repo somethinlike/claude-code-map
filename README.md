@@ -28,6 +28,7 @@ Scans your project using tree-sitter AST parsing and generates compact markdown 
 | `schema.md` | Database schema (Prisma, Django, etc.) |
 | `types.md` | Interfaces, enums, type aliases with fields |
 | `graph.md` | Import dependency graph, hot files ranking, external deps |
+| `audit.md` | Passive code audit — structural AI-smell detection, ranked by severity × import heat |
 
 Then add one line to your `CLAUDE.md`:
 
@@ -136,6 +137,31 @@ Hop 3:
 ```
 
 This traverses the reverse dependency graph via BFS up to 3 hops. Useful for estimating the impact of a refactor before you start.
+
+## Passive Code Audit
+
+Most AI-coding failure modes are *structural*: junk drawers, monoliths, circular dependencies, type sprawl, incomplete refactors. These are detectable from the export set and import graph alone — no source reading needed. Since `claude-code-map` already has that data, it runs a passive audit on every index pass and writes the findings to `.codemap/audit.md`.
+
+The audit is **opinion-forming, not a linter**. False positives are expected. Treat each finding as "look here first" — a ranked list of structural red flags that give Claude (or you) a prioritized audit target list.
+
+Ten rules run automatically:
+
+| Rule | What it catches | Severity |
+|---|---|---|
+| `junk-drawer` | `utils.ts` / `helpers.ts` / `shared.ts` with 5+ exports across unrelated domains | critical/high/medium |
+| `monolith` | Single file with 15+ top-level exports (type-only files exempted) | critical/high |
+| `circular-dependency` | Tarjan's SCC finds a cycle in the import graph | critical |
+| `layer-violation` | `lib/`, `data/`, `db/` importing from `pages/`, `components/`, `app/` | high |
+| `duplicated-domain` | Same exported symbol name declared in 2+ files | high |
+| `type-sprawl` | 3+ variants of the same root type (`User`, `UserData`, `IUser`, `UserDto`) | high |
+| `legacy-marker` | Exports or paths matching `_old`, `_legacy`, `_v1`, `_deprecated`, `_backup` | high |
+| `unused-export` | File exports symbols but nothing imports it, and it's not an entry point | medium |
+| `dead-file` | Zero imports in, zero out, not an entry point | medium |
+| `naming-inconsistency` | File mixes camelCase and snake_case exports (2+ of each) | low |
+
+Findings are ranked by **severity × import heat** — a medium issue in a file imported by 50 others outranks a high issue in a file nobody uses. The `audit.md` output leads with a Top Priority table, then groups all findings by severity for deeper review.
+
+Entry points (`cli.ts`, `main.ts`, `index.ts`, `*.config.ts`, etc.) are exempted from the dead-file and unused-export rules. Type-only files are exempted from the monolith rule.
 
 ## Delta-Aware Caching
 

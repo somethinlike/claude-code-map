@@ -1,5 +1,5 @@
 # claude-code-map -- Manual Test Guide
-**Updated:** 2026.04.07
+**Updated:** 2026.04.10
 
 ## Prerequisites
 - Node >= 20
@@ -73,6 +73,69 @@
 - [ ] `schema.md` shows models with fields and types
 - [ ] Audit fields (createdAt, updatedAt) skipped
 - [ ] Simple models use compact single-line format
+
+### 3.6 Audit (`.codemap/audit.md`)
+- [ ] File generated automatically on every index pass (no flag needed)
+- [ ] Header shows files analyzed, rules run, total findings, severity breakdown
+- [ ] "Top Priority" table ranks findings by score (severity × heat)
+- [ ] Findings grouped under Critical / High / Medium / Low sections
+- [ ] Each finding shows file path, title, signals, action, and `[hot: N]` suffix when imported
+- [ ] CLI summary line prints: `audit: N findings (C critical, H high, M medium, L low)`
+- [ ] File is NOT generated when there are zero findings (clean codebases)
+
+#### 3.6.1 Junk Drawer Detection
+- [ ] Create `src/utils.ts` with 10+ exported functions across unrelated domains
+- [ ] Run index; junk-drawer finding should fire, severity `high`
+- [ ] Add 5 more exports (15 total); severity escalates to `critical`
+- [ ] Delete exports down to 2; finding disappears entirely
+
+#### 3.6.2 Monolith Detection
+- [ ] Create a non-utils file with 16+ exported functions
+- [ ] Run index; monolith finding fires at `high`
+- [ ] Add 10 more exports (26 total); severity escalates to `critical`
+- [ ] Create `src/types.ts` with only interfaces/types; should NOT flag as monolith (type-only exemption)
+
+#### 3.6.3 Circular Dependency Detection
+- [ ] Create `a.ts` imports `b.ts` imports `a.ts`
+- [ ] Run index; `circular-dependency` finding fires at `critical`
+- [ ] Cycle text shows both files in sequence
+
+#### 3.6.4 Layer Violation
+- [ ] Create `src/lib/helper.ts` that imports from `src/pages/home.tsx`
+- [ ] Run index; `layer-violation` finding fires at `high`
+- [ ] Reverse the direction (pages imports lib) — no finding
+
+#### 3.6.5 Duplicated Domain
+- [ ] Export `validateSession` from two different files
+- [ ] Run index; `duplicated-domain` finding fires at `high`
+- [ ] Rename one; finding disappears
+- [ ] Common symbols like `GET`, `loader`, `init`, `run` should NOT trigger the rule
+
+#### 3.6.6 Type Sprawl
+- [ ] Declare `User`, `UserData`, `UserInfo` in one or more files
+- [ ] Run index; `type-sprawl` finding fires with root name `User` and 3 variants listed
+- [ ] `IUser` also counts (leading `I` stripped for normalization)
+- [ ] Only 2 variants → no finding
+
+#### 3.6.7 Legacy Markers
+- [ ] Rename a file to `parser_v1.ts` → finding fires
+- [ ] Add an exported function named `parseOld_v1` → finding fires in its host file
+- [ ] Files under `legacy/` directories also flag
+
+#### 3.6.8 Dead File / Unused Export
+- [ ] Create `src/orphan.ts` with one export, no imports in or out → `dead-file` finding (medium)
+- [ ] Create `src/orphan2.ts` that imports something but nothing imports it → `unused-export` finding (medium)
+- [ ] Entry points (`cli.ts`, `main.ts`, `index.ts`, `*.config.ts`) should NOT flag
+
+#### 3.6.9 Naming Inconsistency
+- [ ] Create a file with 2 camelCase exports AND 2 snake_case exports → low-severity finding
+- [ ] All camelCase: no finding
+- [ ] PascalCase classes and UPPER_SNAKE constants are ignored in the count
+
+#### 3.6.10 Scoring Behavior
+- [ ] Run audit on a codebase with both a critical (cold) finding and a high (hot, imported 5x) finding
+- [ ] Critical should still rank first (severity dominates at low hotness)
+- [ ] Create a medium-severity finding in a file imported by 50+ others — it should rank above a cold high (heat promotion by design)
 
 ---
 

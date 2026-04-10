@@ -70,7 +70,17 @@ npm run test:watch  # vitest watch mode
 - **`src/extractors/imports.ts`**: import extraction dispatcher + resolver (relative paths to project files)
 - **`src/graph.ts`**: graph construction (adjacency + reverse adjacency), BFS blast radius, hot files ranking
 - **`src/formatters/graph-md.ts`**: graph markdown formatter
-- **153 tests** across 19 test files
+
+## V2.0.2 Features — Passive Code Audit
+- **10 structural audit rules** run automatically on every index pass, detecting common AI-coding smells without reading source code
+- **`audit.md` output**: `.codemap/audit.md` with Top Priority ranked table + findings grouped by severity
+- **Heat-weighted scoring**: severity × `log10(1 + hotness)` — severity dominates at low hotness, extreme hotness can promote across tiers
+- **Tarjan's SCC** for circular dependency detection (in `src/audit.ts` itself, no graph library dependency)
+- **`src/audit.ts`**: `runAudit()` entry point + 10 rule functions (detectJunkDrawers, detectMonoliths, detectCircularDependencies, detectLayerViolations, detectDuplicatedDomains, detectTypeSprawl, detectLegacyMarkers, detectDeadFiles, detectUnusedExportFiles, detectNamingInconsistency)
+- **`src/formatters/audit-md.ts`**: audit markdown formatter with Top Priority table
+- **Entry point exemption list** (`AUDIT_ENTRY_POINT_PATTERNS` in `types.ts`): cli/main/index/config files are exempted from dead-file and unused-export rules
+- **Type-only file exemption**: monolith rule skips files where all exports are interface/type/enum kinds (legitimate type barrels)
+- **218 tests** across 22 test files (65 new audit tests)
 
 ## Calendar Versioning
 Format: `YYYY.MM.DD.HHmm` (CST). npm uses semver (1.1.0), `--version` shows both.

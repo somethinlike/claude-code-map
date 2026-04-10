@@ -20,6 +20,8 @@ import { formatTypes } from './formatters/types-md.ts';
 import { extractImports, resolveImport } from './extractors/imports.ts';
 import { buildImportGraph, computeBlastRadius, formatBlastRadius } from './graph.ts';
 import { formatGraph } from './formatters/graph-md.ts';
+import { runAudit } from './audit.ts';
+import { formatAudit } from './formatters/audit-md.ts';
 import { extractAstroImports, extractAstroRoutes } from './queries/astro.ts';
 import { installHook } from './hook.ts';
 import { lookupSymbol } from './lookup.ts';
@@ -183,6 +185,7 @@ Output:
   .codemap/schema.md      Database schema (if detected)
   .codemap/types.md       Interfaces, enums, type aliases
   .codemap/graph.md       Import dependency graph and hot files
+  .codemap/audit.md       Passive code audit (AI-smell detection)
 
 Languages:
   TypeScript, JavaScript, TSX, JSX, Python, Go, Rust, Java, C#,
@@ -407,6 +410,18 @@ async function main(): Promise<void> {
     writeFileSync(join(outputDir, 'graph.md'), graphMd);
   }
 
+  // Step 8b: Run passive code audit and write report
+  const auditReport = runAudit({
+    parsedFiles,
+    importGraph,
+    allSymbols,
+    allTypes,
+  });
+  const auditMd = formatAudit(auditReport);
+  if (auditMd) {
+    writeFileSync(join(outputDir, 'audit.md'), auditMd);
+  }
+
   // Step 9: Write cache
   writeCache(outputDir, files);
   writeCacheData(outputDir, parsedFiles);
@@ -417,12 +432,17 @@ async function main(): Promise<void> {
   if (routesMd) outputFiles.push('routes.md');
   if (schemaMd) outputFiles.push('schema.md');
   if (graphMd) outputFiles.push('graph.md');
+  if (auditMd) outputFiles.push('audit.md');
 
   log(`\n[codemap] Done in ${elapsed}s`);
   log(`[codemap] ${files.length} files → ${outputFiles.length} index files in ${config.output}/`);
   log(`[codemap] ${allSymbols.length} exports, ${allRoutes.length} routes, ${allTypes.length} types, ${models.length} models`);
   if (importGraph.edges.length > 0) {
     log(`[codemap] ${importGraph.edges.length} internal import edges, ${importGraph.hotFiles.length} connected files`);
+  }
+  if (auditReport.findings.length > 0) {
+    const { critical, high, medium, low } = auditReport.stats.bySeverity;
+    log(`[codemap] audit: ${auditReport.findings.length} findings (${critical} critical, ${high} high, ${medium} medium, ${low} low)`);
   }
   if (parseErrors > 0) {
     log(`[codemap] ${parseErrors} files had parse errors (skipped)`);
