@@ -421,10 +421,10 @@ async function main(): Promise<void> {
   const auditPath = join(outputDir, 'audit.md');
   if (auditMd) {
     writeFileSync(auditPath, auditMd);
-  } else if (existsSync(auditPath)) {
+  } else {
     // Findings dropped to zero — remove the stale report so consumers
-    // don't see outdated findings.
-    rmSync(auditPath);
+    // don't see outdated findings. force:true makes it idempotent.
+    rmSync(auditPath, { force: true });
   }
 
   // Step 9: Write cache

@@ -53,7 +53,6 @@ export async function initParser(): Promise<void> {
   ParserClass = TreeSitterParser;
 }
 
-// Re-export Language for loadLanguage
 let LanguageClass: any = null;
 
 async function ensureLanguageClass(): Promise<void> {

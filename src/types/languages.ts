@@ -32,10 +32,8 @@ export const EXTENSION_MAP: Record<string, SupportedLanguage> = {
   '.astro': 'astro',
 };
 
-// tree-sitter-wasms ships grammar files with these names.
-// Partial<Record<...>> because astro has no tree-sitter grammar (uses
-// regex frontmatter extraction in queries/astro.ts and is routed through
-// a separate code path in cli.ts before reaching the parser).
+// astro has no tree-sitter grammar — handled via regex in queries/astro.ts
+// and routed through a dedicated branch in cli.ts before reaching the parser.
 export const WASM_FILE_MAP: Partial<Record<SupportedLanguage, string>> = {
   typescript: 'tree-sitter-typescript.wasm',
   javascript: 'tree-sitter-javascript.wasm',

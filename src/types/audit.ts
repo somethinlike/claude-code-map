@@ -33,11 +33,8 @@ export interface AuditReport {
   };
 }
 
-// Entry point patterns: files matching these are exempt from dead-file /
-// unused-export rules. The `types(\.ts|\/)` alternation matches both the
-// barrel file `types.ts` AND any file under `types/` (the per-domain type
-// modules), so the whole declarative type zone is treated as an entry-
-// point boundary.
+// Files matching these are exempt from dead-file / unused-export rules.
+// `types(\.ts|\/)` covers both the barrel and the per-domain types/ directory.
 export const AUDIT_ENTRY_POINT_PATTERNS: readonly RegExp[] = [
   /(^|\/)cli\.(ts|js|mjs|cjs|py)$/,
   /(^|\/)main\.(ts|js|mjs|cjs|py|go|rs|java|kt)$/,

@@ -1,20 +1,4 @@
-/**
- * Type definitions barrel.
- *
- * Types are split by domain under `./types/` (one file per concern) per the
- * architecture rule that each domain gets its own module. This barrel exists
- * for backward compatibility with existing consumers — it re-exports every
- * symbol from the per-domain files unchanged.
- *
- * New code should prefer importing from the specific domain file for clearer
- * dependency intent:
- *
- *   import type { ExtractedSymbol } from './types/symbols.ts';
- *
- * rather than:
- *
- *   import type { ExtractedSymbol } from './types.ts';
- */
+// Barrel for ./types/<domain>.ts — prefer importing from the domain file directly.
 export * from './types/languages.ts';
 export * from './types/symbols.ts';
 export * from './types/routes.ts';
