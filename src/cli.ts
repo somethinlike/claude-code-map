@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { DEFAULT_CONFIG } from './types.ts';
 import type { CodemapConfig } from './types.ts';
@@ -418,8 +418,13 @@ async function main(): Promise<void> {
     allTypes,
   });
   const auditMd = formatAudit(auditReport);
+  const auditPath = join(outputDir, 'audit.md');
   if (auditMd) {
-    writeFileSync(join(outputDir, 'audit.md'), auditMd);
+    writeFileSync(auditPath, auditMd);
+  } else if (existsSync(auditPath)) {
+    // Findings dropped to zero — remove the stale report so consumers
+    // don't see outdated findings.
+    rmSync(auditPath);
   }
 
   // Step 9: Write cache

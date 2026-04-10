@@ -64,6 +64,9 @@ async function ensureLanguageClass(): Promise<void> {
 
 async function loadLanguage(language: SupportedLanguage): Promise<Language> {
   const wasmFile = WASM_FILE_MAP[language];
+  if (!wasmFile) {
+    throw new Error(`No tree-sitter grammar registered for language: ${language}`);
+  }
   if (languageCache.has(wasmFile)) {
     return languageCache.get(wasmFile)!;
   }
