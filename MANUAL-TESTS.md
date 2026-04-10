@@ -302,6 +302,15 @@
 - [ ] Graceful error message, not a stack trace
 - [ ] Exit code 1
 
+### 9.6 Re-Exports Captured as Edges (V2.0.4)
+- [ ] Create a barrel file `src/index.ts` containing only `export * from './foo.ts'` and `export * from './bar.ts'` (with foo.ts and bar.ts existing in the same directory)
+- [ ] Run `npx claude-code-map --force`
+- [ ] `graph.md` shows `src/index.ts` with `Imports: 2` (not 0)
+- [ ] Run `--blast src/foo.ts` and verify `src/index.ts` appears in the dependents list (the re-export edge is followed)
+- [ ] Repeat with `export { Foo } from './foo.ts'` (named re-export) — same result
+- [ ] Repeat with `export type * from './foo.ts'` (type-only re-export) — same result
+- [ ] Verify re-export is NOT counted as an export of the barrel itself: `exports.md` for `src/index.ts` should be empty (the barrel forwards but doesn't declare)
+
 ---
 
 ## 10. Real Project Tests
