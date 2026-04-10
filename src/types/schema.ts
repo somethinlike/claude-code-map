@@ -16,7 +16,7 @@ export interface ExtractedModel {
 // ORM-managed audit columns (createdAt/updatedAt/deletedAt + snake_case
 // variants). The schema extractor skips these when listing user-defined
 // fields in schema.md — they're boilerplate, not domain data.
-export const AUDIT_SKIP_FIELDS = new Set([
+export const ORM_AUDIT_COLUMNS = new Set([
   'createdAt',
   'updatedAt',
   'deletedAt',

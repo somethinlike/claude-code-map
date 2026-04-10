@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ExtractedModel, SchemaField, CodemapConfig } from '../types.ts';
-import { AUDIT_SKIP_FIELDS } from '../types.ts';
+import { ORM_AUDIT_COLUMNS } from '../types.ts';
 
 export async function extractSchema(
   projectRoot: string,
@@ -102,10 +102,10 @@ function parsePrismaSchema(filePath: string): ExtractedModel[] {
       const fieldName = fieldMatch[1];
       const fieldType = fieldMatch[2];
 
-      // Skip audit fields unless they have special attributes
+      // Skip ORM-managed audit columns unless they have special attributes
       const isPK = trimmed.includes('@id');
       const isUQ = trimmed.includes('@unique');
-      if (AUDIT_SKIP_FIELDS.has(fieldName) && !isPK && !isUQ) continue;
+      if (ORM_AUDIT_COLUMNS.has(fieldName) && !isPK && !isUQ) continue;
 
       const attributes: string[] = [];
       if (isPK) attributes.push('PK');
