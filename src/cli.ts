@@ -9,7 +9,7 @@ import { detectFramework } from './framework-detector.ts';
 import { initParser, parseFile } from './parser.ts';
 import { loadCache, getChangedFiles, writeCache, writeCacheData, loadCacheData } from './cache.ts';
 import { extractExportsAsync } from './extractors/exports.ts';
-import { extractTypes } from './extractors/types.ts';
+import { extractTypes } from './extractors/type-info.ts';
 import { extractRoutes } from './extractors/routes.ts';
 import { extractSchema } from './extractors/schema.ts';
 import { formatStructure } from './formatters/structure-md.ts';

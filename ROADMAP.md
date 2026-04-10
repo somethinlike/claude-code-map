@@ -311,7 +311,7 @@ Ships as a **separate npm package** to keep the core CLI zero-bloat.
 
 ### Phase 3 — Extraction
 7. src/extractors/exports.ts
-8. src/extractors/types.ts
+8. src/extractors/type-info.ts
 9. src/extractors/routes.ts
 10. src/framework-detector.ts
 
