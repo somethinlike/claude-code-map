@@ -249,6 +249,24 @@ Insight: the index already contains ~90% of what's needed to flag common AI-codi
 **Dependencies:** None (pure in-memory analysis)
 **Test count:** 218 tests across 22 test files (65 new)
 
+### V2.0.3: Eat Our Own Dog Food — types.ts Decomposition
+
+The first thing the V2.0.2 audit feature found when run against this project was its own `src/types.ts` — a 352-line "monolith" with 33 top-level exports across 13 domains, imported by 30+ files. The architecture rule says "one module per domain"; types.ts violated that for every concept in the project. Fixing it both resolves the only critical finding and demonstrates that the tool's recommendations apply to itself.
+
+**Changes:**
+- [x] **Decomposed `src/types.ts` into 13 per-domain files** under `src/types/` (`languages.ts`, `symbols.ts`, `routes.ts`, `schema.ts`, `extracted-types.ts`, `frameworks.ts`, `files.ts`, `imports.ts`, `graph.ts`, `parsed.ts`, `audit.ts`, `cache.ts`, `config.ts`)
+- [x] **`src/types.ts` is now a 13-line `export *` barrel** preserving the public API exactly. Zero consumer churn — all 41 import sites continue to resolve unchanged because the tree-sitter export queries require an `export_statement` with a `declaration` child, so re-export statements are invisible to the extractor and the barrel registers as zero exports. The monolith finding disappears naturally.
+- [x] **Renamed `AUDIT_SKIP_FIELDS` → `ORM_AUDIT_COLUMNS`**: the old name implied the audit rule skipped these fields, but the constant is consumed by the schema extractor to skip ORM-managed audit columns (createdAt/updatedAt/etc.) when listing user-defined fields.
+- [x] **Renamed `src/extractors/types.ts` → `src/extractors/type-info.ts`**: avoids the path-stem collision with the new `src/types/` directory.
+- [x] **`WASM_FILE_MAP` typed as `Partial<Record<SupportedLanguage,string>>`** because astro has no tree-sitter grammar (it uses regex frontmatter extraction and is routed through a separate branch in `cli.ts`). `parser.ts` gets a runtime guard.
+- [x] **Deleted dead `GRAMMAR_LANGUAGE_MAP`** — declared in types.ts, referenced nowhere.
+- [x] **`AUDIT_ENTRY_POINT_PATTERNS` regex extended** from `types\.(ts|d\.ts)$` to `types(\.ts|\/)` so the whole declarative type zone is exempt from dead-file/unused-export rules.
+- [x] **`cli.ts` removes stale `audit.md`** when findings drop to zero, instead of leaving the previous report on disk for consumers to read. Bug exposed by this very refactor.
+
+**New finding:** the import graph extractor also fails to count `export * from './x.ts'` as an import edge — the import queries operate on `import_statement` nodes, not `export_statement`. The barrel's links to its per-domain files are invisible to the graph. Filed as a future feature gap; for this refactor, the per-domain files have in-degree ≥1 from internal cross-references so they don't trip dead-file regardless.
+
+**Verification:** typecheck clean (was 4 pre-existing errors), 218/218 tests pass, audit produces 0 findings.
+
 ### V2.1: MCP Server (separate package: `claude-code-map-mcp`, npm 2.1.0)
 
 Ships as a **separate npm package** to keep the core CLI zero-bloat.

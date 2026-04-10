@@ -82,6 +82,24 @@ npm run test:watch  # vitest watch mode
 - **Type-only file exemption**: monolith rule skips files where all exports are interface/type/enum kinds (legitimate type barrels)
 - **218 tests** across 22 test files (65 new audit tests)
 
+## V2.0.3 Architecture — types.ts Decomposition
+- **`src/types.ts` is now a 13-line `export *` barrel.** The actual type
+  definitions live in `src/types/<domain>.ts` (one file per domain). New
+  code should import from the specific domain file (`./types/symbols.ts`
+  etc.) for clearer dependency intent. The barrel exists for backward
+  compatibility — every existing `import { ... } from './types.ts'` site
+  still works.
+- **`src/extractors/type-info.ts`** (renamed from `types.ts`) is the
+  tree-sitter type extractor. Renamed to avoid the path-stem collision
+  with the new `src/types/` directory.
+- **`ORM_AUDIT_COLUMNS`** (in `src/types/schema.ts`, renamed from
+  `AUDIT_SKIP_FIELDS`) is the set of ORM-managed audit column names
+  (createdAt/updatedAt/deletedAt/etc.) that the schema extractor skips
+  when listing user-defined fields.
+- **`AUDIT_ENTRY_POINT_PATTERNS`** (in `src/types/audit.ts`) — the regex
+  list now exempts the entire `src/types/` directory from dead-file and
+  unused-export rules.
+
 ## Calendar Versioning
 Format: `YYYY.MM.DD.HHmm` (CST). npm uses semver (1.1.0), `--version` shows both.
 
