@@ -82,6 +82,7 @@
 - [ ] Each finding shows file path, title, signals, action, and `[hot: N]` suffix when imported
 - [ ] CLI summary line prints: `audit: N findings (C critical, H high, M medium, L low)`
 - [ ] File is NOT generated when there are zero findings (clean codebases)
+- [ ] Stale `audit.md` is **removed** when findings drop to zero on a re-run (idempotent — reruns on a clean codebase don't error if the file is already absent)
 
 #### 3.6.1 Junk Drawer Detection
 - [ ] Create `src/utils.ts` with 10+ exported functions across unrelated domains
