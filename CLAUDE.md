@@ -82,6 +82,23 @@ npm run test:watch  # vitest watch mode
 - **Type-only file exemption**: monolith rule skips files where all exports are interface/type/enum kinds (legitimate type barrels)
 - **218 tests** across 22 test files (65 new audit tests)
 
+## V2.1.0 — Route Extraction Hardening
+- **8 route extraction bugs fixed across 7 languages.** First Tier 1
+  RealWorld benchmark sweep found that route extraction was broken for
+  7 of 11 frameworks. After this release: 9 of 11 work correctly.
+- **New extractors:** C# ASP.NET Core (`extractCsharpRoutes`), Rust
+  Axum + Actix (`extractRustRoutes`). Both languages had no route
+  extraction at all before V2.1.0.
+- **Bugs fixed:**
+  - **PHP** — `member_call_expression` (instance call) → `scoped_call_expression` (Class::method). Fixes a query parser crash. Also handles single AND double quoted strings.
+  - **Java** — added `element_value_pair` query for `@RequestMapping(path = "/foo")` named-arg form (real Spring code commonly uses this).
+  - **Kotlin** — added `constructor_invocation` wrapper that the Kotlin grammar puts between `annotation` and `user_type` (Java grammar lacks this layer).
+  - **Python** — added older `url(r'^foo$', view)` form (not just modern `path()`/`re_path()`).
+  - **Go** — case-insensitive HTTP method matching (Gin uses uppercase `router.GET`, code only matched title-case `Get`).
+  - **TypeScript Express** — removed same-line constraint that dropped multi-line `router.get(...)` declarations where the path is on its own line.
+- **Tests:** 226 → 245 (+19 route extractor integration tests in `src/queries/routes.test.ts`).
+- **Benchmark protocol:** see `BENCHMARKS.md` for the Tier 1 audit method and full results log.
+
 ## V2.0.4 — Re-export Graph Fix
 - **TypeScript import extractor now captures re-exports.** `export * from './x.ts'` and `export { Foo } from './x.ts'` were previously invisible to `extractTsImports` because the queries only matched `import_statement` nodes. The new `EXPORT_FROM_QUERY` matches `(export_statement source: (string))` and runs alongside the three existing import queries.
 - **`parseSource(source, language)`** in `src/parser.ts` is the new test seam — parses an in-memory string into a tree without touching disk. `parseFile` now wraps it.

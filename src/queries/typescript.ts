@@ -309,8 +309,12 @@ export async function extractTsRoutes(
       if (!methodCap || methodCap.name !== 'http_method') continue;
       if (!HTTP_METHODS.has(methodCap.text.toLowerCase())) continue;
 
+      // The path is the next route_path capture after this router_obj.
+      // Don't require same-line — multi-line router calls (where each
+      // argument is on its own line) are common and the path may be
+      // several lines after the router.method() call.
       const pathCapture = captures.find(
-        (c, j) => j > i && c.name === 'route_path' && c.startRow === cap.startRow,
+        (c, j) => j > i && c.name === 'route_path',
       );
       if (pathCapture) {
         const routePath = pathCapture.text.replace(/['"]/g, '');

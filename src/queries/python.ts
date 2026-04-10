@@ -185,17 +185,23 @@ export async function extractPyRoutes(
     }
   }
 
-  // Django URLs
+  // Django URLs. Three URL function forms in the wild:
+  //   path('articles/', view)        — Django 2.0+
+  //   re_path(r'^articles/$', view)  — Django 2.0+ regex form
+  //   url(r'^articles/$', view)      — Django <2.0, still common in older codebases
   if (filePath.endsWith('urls.py')) {
+    const djangoUrlFns = new Set(['path', 're_path', 'url']);
     const djangoCaptures = await runQuery(language, tree, DJANGO_URL_QUERY);
     for (let i = 0; i < djangoCaptures.length; i++) {
       const cap = djangoCaptures[i];
-      if (cap.name === 'url_func' && (cap.text === 'path' || cap.text === 're_path')) {
+      if (cap.name === 'url_func' && djangoUrlFns.has(cap.text)) {
         const pathCap = djangoCaptures[i + 1];
         if (pathCap?.name === 'url_path') {
+          // Strip Python string prefixes (r"...", b"...") and quotes
+          const rawPath = pathCap.text.replace(/^[rRbBuU]+/, '').replace(/['"]/g, '');
           routes.push({
             method: 'ALL',
-            path: '/' + pathCap.text.replace(/['"]/g, ''),
+            path: rawPath.startsWith('/') ? rawPath : '/' + rawPath,
             filePath,
             line: cap.startRow + 1,
             handler: '',

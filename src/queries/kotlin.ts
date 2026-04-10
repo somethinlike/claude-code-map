@@ -29,15 +29,22 @@ const INTERFACE_QUERY = `
   (class_body)? @iface_body)
 `;
 
-// Kotlin Spring routes use same annotations as Java
+// Kotlin annotations with arguments wrap their content in a
+// constructor_invocation node — `@PostMapping("/foo")` parses as
+// `annotation > constructor_invocation > user_type + value_arguments`,
+// not `annotation > user_type + value_arguments` like the Java grammar.
+// Bare marker annotations (`@GetMapping`) skip the wrapper and go
+// straight to `annotation > user_type`, so they need a separate query.
 const SPRING_ANNOTATION_QUERY = `
 (function_declaration
   (modifiers
     (annotation
-      (user_type (type_identifier) @anno_name)
-      (value_arguments
-        (value_argument
-          (string_literal) @route_path))?))
+      (constructor_invocation
+        (user_type (type_identifier) @anno_name)
+        (value_arguments
+          (value_argument
+            (string_literal
+              (string_content) @route_path))))))
   (simple_identifier) @handler_name)
 `;
 
@@ -53,10 +60,12 @@ const CLASS_ANNOTATION_QUERY = `
 (class_declaration
   (modifiers
     (annotation
-      (user_type (type_identifier) @anno_name)
-      (value_arguments
-        (value_argument
-          (string_literal) @base_path))?))
+      (constructor_invocation
+        (user_type (type_identifier) @anno_name)
+        (value_arguments
+          (value_argument
+            (string_literal
+              (string_content) @base_path))))))
   (type_identifier) @class_name)
 `;
 

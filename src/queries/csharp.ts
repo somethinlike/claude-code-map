@@ -63,6 +63,66 @@ const PROPERTY_QUERY = `
   name: (identifier) @prop_name)
 `;
 
+// ASP.NET Core controller routing.
+// Class-level [Route("base")] sets a path prefix for all methods.
+// Method-level [HttpGet]/[HttpPost("/path")]/etc. declare individual routes.
+// Bare and with-path forms have different parse trees so we use two queries
+// and dedupe by method name (mirroring the Kotlin/Java Spring pattern).
+const ASPNET_METHOD_PATH_QUERY = `
+(method_declaration
+  (attribute_list
+    (attribute
+      name: (identifier) @attr_name
+      (attribute_argument_list
+        (attribute_argument
+          (string_literal) @route_path))))
+  name: (identifier) @method_name)
+`;
+
+const ASPNET_METHOD_MARKER_QUERY = `
+(method_declaration
+  (attribute_list
+    (attribute
+      name: (identifier) @attr_name))
+  name: (identifier) @method_name)
+`;
+
+const ASPNET_CLASS_ROUTE_QUERY = `
+(class_declaration
+  (attribute_list
+    (attribute
+      name: (identifier) @attr_name
+      (attribute_argument_list
+        (attribute_argument
+          (string_literal) @class_path))))
+  name: (identifier) @class_name)
+`;
+
+// Map ASP.NET attribute names to HTTP methods.
+const ASPNET_HTTP_METHODS: Record<string, string> = {
+  HttpGet: 'GET',
+  HttpPost: 'POST',
+  HttpPut: 'PUT',
+  HttpPatch: 'PATCH',
+  HttpDelete: 'DELETE',
+  HttpHead: 'HEAD',
+  HttpOptions: 'OPTIONS',
+  Route: 'ALL',
+};
+
+function stripCsharpString(text: string): string {
+  return text.replace(/^["']|["']$/g, '');
+}
+
+function joinAspnetPaths(base: string, path: string): string {
+  const b = base.replace(/\/$/, '');
+  const p = path.replace(/^\//, '');
+  if (!b && !p) return '/';
+  if (!b) return '/' + p;
+  if (!p) return '/' + b;
+  return '/' + b + '/' + p;
+}
+
 /**
  * Build a map of declaration name → set of modifier texts from a modifier query.
  * Handles multiple modifiers per declaration (e.g. "public static") by collecting
@@ -205,6 +265,74 @@ export async function extractCsharpTypes(
   }
 
   return types;
+}
+
+export async function extractCsharpRoutes(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedRoute[]> {
+  const routes: ExtractedRoute[] = [];
+
+  // Class-level [Route("base")] — used as a prefix for all methods in the class.
+  let basePath = '';
+  const classCaptures = await runQuery(language, tree, ASPNET_CLASS_ROUTE_QUERY);
+  for (let i = 0; i < classCaptures.length; i++) {
+    const cap = classCaptures[i];
+    if (cap.name === 'attr_name' && cap.text === 'Route') {
+      const pathCap = classCaptures.find((c, j) => j > i && c.name === 'class_path');
+      if (pathCap) {
+        basePath = stripCsharpString(pathCap.text);
+        break;
+      }
+    }
+  }
+
+  // Methods with explicit path: [HttpGet("feed")]
+  const pathCaptures = await runQuery(language, tree, ASPNET_METHOD_PATH_QUERY);
+  for (let i = 0; i < pathCaptures.length; i++) {
+    const cap = pathCaptures[i];
+    if (cap.name !== 'attr_name' || !ASPNET_HTTP_METHODS[cap.text]) continue;
+
+    const pathCap = pathCaptures.find((c, j) => j > i && j < i + 3 && c.name === 'route_path');
+    const methodCap = pathCaptures.find((c, j) => j > i && c.name === 'method_name');
+    const path = pathCap ? stripCsharpString(pathCap.text) : '';
+    routes.push({
+      method: ASPNET_HTTP_METHODS[cap.text],
+      path: joinAspnetPaths(basePath, path),
+      filePath,
+      line: cap.startRow + 1,
+      handler: methodCap?.text || '',
+      auth: false,
+      framework: 'aspnet',
+    });
+  }
+
+  // Bare attribute form: [HttpGet] (path inherited from class-level [Route])
+  const markerCaptures = await runQuery(language, tree, ASPNET_METHOD_MARKER_QUERY);
+  for (let i = 0; i < markerCaptures.length; i++) {
+    const cap = markerCaptures[i];
+    if (cap.name !== 'attr_name' || !ASPNET_HTTP_METHODS[cap.text]) continue;
+    if (cap.text === 'Route') continue; // class-level only
+
+    const methodCap = markerCaptures.find((c, j) => j > i && c.name === 'method_name');
+    const handler = methodCap?.text || '';
+
+    // Skip if a path-form route already covers this handler
+    if (routes.some((r) => r.handler === handler && r.line === cap.startRow + 1)) continue;
+
+    routes.push({
+      method: ASPNET_HTTP_METHODS[cap.text],
+      path: joinAspnetPaths(basePath, ''),
+      filePath,
+      line: cap.startRow + 1,
+      handler,
+      auth: false,
+      framework: 'aspnet',
+    });
+  }
+
+  return routes;
 }
 
 export function parseCsharpEnumBody(bodyText: string): TypeField[] {

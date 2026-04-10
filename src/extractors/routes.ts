@@ -6,6 +6,8 @@ import { extractJavaRoutes } from '../queries/java.ts';
 import { extractPhpRoutes } from '../queries/php.ts';
 import { extractRubyRoutes } from '../queries/ruby.ts';
 import { extractKotlinRoutes } from '../queries/kotlin.ts';
+import { extractCsharpRoutes } from '../queries/csharp.ts';
+import { extractRustRoutes } from '../queries/rust.ts';
 
 const AUTH_PATTERNS = [
   'auth', 'authenticate', 'requireAuth', 'isAuthenticated',
@@ -43,6 +45,10 @@ export async function extractRoutes(
       return extractRubyRoutes(tree, language, filePath);
     case 'kotlin':
       return extractKotlinRoutes(tree, language, filePath);
+    case 'csharp':
+      return extractCsharpRoutes(tree, language, filePath);
+    case 'rust':
+      return extractRustRoutes(tree, language, filePath);
     default:
       return [];
   }

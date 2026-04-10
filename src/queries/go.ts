@@ -147,28 +147,36 @@ export async function extractGoRoutes(
   language: SupportedLanguage,
   filePath: string,
 ): Promise<ExtractedRoute[]> {
-  const HTTP_METHODS = new Set(['Get', 'Post', 'Put', 'Patch', 'Delete', 'HandleFunc', 'Handle']);
+  // Gin uses GET/POST/etc. (uppercase). gorilla/mux + net/http use HandleFunc.
+  // chi uses Get/Post (title-case). Match all conventions case-insensitively.
+  const HTTP_METHOD_NAMES = new Set([
+    'get', 'post', 'put', 'patch', 'delete', 'head', 'options',
+    'handlefunc', 'handle', 'any',
+  ]);
   const routes: ExtractedRoute[] = [];
 
   const captures = await runQuery(language, tree, HTTP_ROUTE_QUERY);
   for (let i = 0; i < captures.length; i++) {
     const cap = captures[i];
-    if (cap.name === 'http_method' && HTTP_METHODS.has(cap.text)) {
-      const pathCap = captures.find((c, j) => j > i && c.name === 'route_path');
-      if (pathCap) {
-        const method = cap.text === 'HandleFunc' || cap.text === 'Handle'
-          ? 'ALL' : cap.text.toUpperCase();
-        routes.push({
-          method,
-          path: pathCap.text.replace(/"/g, ''),
-          filePath,
-          line: cap.startRow + 1,
-          handler: '',
-          auth: false,
-          framework: 'go-http',
-        });
-      }
-    }
+    if (cap.name !== 'http_method') continue;
+    const lower = cap.text.toLowerCase();
+    if (!HTTP_METHOD_NAMES.has(lower)) continue;
+
+    const pathCap = captures.find((c, j) => j > i && c.name === 'route_path');
+    if (!pathCap) continue;
+
+    const method = lower === 'handlefunc' || lower === 'handle' || lower === 'any'
+      ? 'ALL'
+      : lower.toUpperCase();
+    routes.push({
+      method,
+      path: pathCap.text.replace(/"/g, ''),
+      filePath,
+      line: cap.startRow + 1,
+      handler: '',
+      auth: false,
+      framework: 'go-http',
+    });
   }
 
   return routes;

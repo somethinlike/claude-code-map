@@ -288,6 +288,52 @@ This is the same shape of AST-query bug as the Java `annotation` vs `marker_anno
 
 **Out of scope:** the equivalent fix for Rust (`pub use crate::module::Foo`) and any other languages with re-export idioms. Filed as future work; TypeScript was the surfaced bug because of how common barrel files are in TS projects.
 
+### V2.1.0: Route Extraction Hardening (npm 2.1.0)
+
+First Tier 1 RealWorld benchmark sweep surfaced that route extraction was broken across 7 of 11 frameworks. V2.1.0 fixes 8 distinct extractor bugs and adds two new extractors (C#, Rust). Coverage went from 4 working frameworks to 9.
+
+**Bugs fixed:**
+- [x] **PHP query syntax error** — used `member_call_expression` (instance call) instead of `scoped_call_expression` (Class::method). Crashed every PHP scan.
+- [x] **PHP single vs double quoted strings** — single-quoted (`'foo'`) parses as `string`, double-quoted (`"foo"`) as `encapsed_string`. Query now alternation-matches both.
+- [x] **Go HTTP method case sensitivity** — Gin uses `router.GET("/path")` (uppercase). The Go HTTP_METHODS set was title-case. Now case-insensitive.
+- [x] **Python Django old `url()` form** — only `path()`/`re_path()` were matched. Older Django codebases (and the RealWorld sample) use `url(r'^foo$', view)`. Added `url` to recognized URL functions.
+- [x] **Kotlin Spring annotation wrapper** — Kotlin annotations with arguments wrap content in `constructor_invocation`, not directly in `annotation`. Java grammar doesn't have this wrapper. Added the missing layer.
+- [x] **Java Spring named-argument annotations** — `@RequestMapping(path = "/foo")` and `@PostMapping(value = "/bar")` use `element_value_pair`, not direct string children. Added a separate query for the named-arg form. Also fixed class-level prefix detection.
+- [x] **TypeScript Express same-line constraint** — the path lookup required `route_path.startRow === router_obj.startRow`. Multi-line router declarations (path on its own line) were silently dropped. Removed the constraint.
+
+**New extractors:**
+- [x] **C# ASP.NET Core** — three queries (`[HttpGet("path")]`, bare `[HttpGet]`, class-level `[Route("base")]`) plus `extractCsharpRoutes()` with prefix joining.
+- [x] **Rust Axum + Actix** — `.route("/path", verb(handler))` chained on `Router::new()` (axum) and `#[get("/path")]` attribute macros (actix). Includes the qualified verb form `routing::post(handler)`.
+
+**New tests:** `src/queries/routes.test.ts` — 19 integration tests via `parseSource()`. Test count 226 → 245.
+
+**Coverage results** (Tier 1 RealWorld sweep):
+
+| Framework | Before | After |
+|---|---|---|
+| TypeScript Express | 8/20 (40%) | **20/20 (100%)** |
+| Python Django | 0/19 (0%) | **15/19 (79%)** |
+| Python Flask | 23/23 (100%) | 23/23 (100%) |
+| Go Gin | 0/26 (0%) | **31/26 (100%+)** |
+| Rust Actix | 0 | 0 (macros, future work) |
+| Rust Axum | 0/12 (0%) | **6/12 (50%)** |
+| Java Spring | 13/19 (68%) | **19/19 (100%)** |
+| Kotlin Spring | 0/19 (0%) | **19/19 (100%)** |
+| C# ASP.NET | 0/19 (0%) | **19/19 (100%)** |
+| Ruby Rails | 0 | 0 (resources DSL, future work) |
+| PHP Laravel | 0 (CRASH) | **11/12 (92%)** |
+
+Frameworks with working route extraction: 4 → **9 of 11**. Total routes captured: ~74 → ~163 (+121%).
+
+Full benchmark notes in `BENCHMARKS.md` Results Log section.
+
+**Known gaps deferred:**
+- Ruby Rails `resources :articles` DSL (would need path synthesis from a 7-route REST template)
+- Rust Actix `register_service!` macro routes (tree-sitter doesn't expand macros)
+- Rust Axum chained verb methods (`get(h).put(h2)` → only `get` captured)
+- Go false positives (~5/26 in gin benchmark — broad `(method) call_expression` matching)
+- Schema extraction for non-Prisma ORMs (Django, Rails AR, Eloquent, JPA, EF, sqlx) — still 0 models on every benchmark
+
 ### V2.1: MCP Server (separate package: `claude-code-map-mcp`, npm 2.1.0)
 
 Ships as a **separate npm package** to keep the core CLI zero-bloat.

@@ -1,4 +1,4 @@
-import type { ExtractedSymbol, ExtractedType, ExtractedImport, TypeField, SupportedLanguage } from '../types.ts';
+import type { ExtractedSymbol, ExtractedType, ExtractedRoute, ExtractedImport, TypeField, SupportedLanguage } from '../types.ts';
 import { runQuery } from '../parser.ts';
 import { truncate } from '../utils.ts';
 
@@ -41,6 +41,52 @@ const TRAIT_QUERY = `
   (visibility_modifier)? @visibility
   name: (type_identifier) @trait_name)
 `;
+
+// Axum routes: .route("/path", post(handler)) chained on Router::new().
+// Captures the simple form where the second argument is a single function
+// call like `post(handler)`. Chained methods (`get(h).put(h)`) only catch
+// the inner verb — the outer .put() is currently a known gap.
+const AXUM_ROUTE_QUERY = `
+(call_expression
+  function: (field_expression
+    field: (field_identifier) @method_name)
+  arguments: (arguments
+    (string_literal) @route_path
+    (call_expression
+      function: (identifier) @http_verb)))
+`;
+
+// Axum routes with qualified verb: .route("/path", routing::post(handler))
+const AXUM_QUALIFIED_ROUTE_QUERY = `
+(call_expression
+  function: (field_expression
+    field: (field_identifier) @method_name)
+  arguments: (arguments
+    (string_literal) @route_path
+    (call_expression
+      function: (scoped_identifier
+        name: (identifier) @http_verb))))
+`;
+
+// Actix attribute macros: #[get("/path")], #[post("/path")] on a function
+const ACTIX_ROUTE_QUERY = `
+(attribute_item
+  (attribute
+    (identifier) @http_verb
+    arguments: (token_tree
+      (string_literal) @route_path)))
+`;
+
+const RUST_HTTP_VERBS: Record<string, string> = {
+  get: 'GET',
+  post: 'POST',
+  put: 'PUT',
+  patch: 'PATCH',
+  delete: 'DELETE',
+  head: 'HEAD',
+  options: 'OPTIONS',
+  any: 'ALL',
+};
 
 export async function extractRustExports(
   tree: any,
@@ -140,6 +186,60 @@ export async function extractRustTypes(
   }
 
   return types;
+}
+
+export async function extractRustRoutes(
+  tree: any,
+  language: SupportedLanguage,
+  filePath: string,
+): Promise<ExtractedRoute[]> {
+  const routes: ExtractedRoute[] = [];
+
+  function pushRoute(verbText: string, pathText: string, line: number, framework: string) {
+    const verb = RUST_HTTP_VERBS[verbText.toLowerCase()];
+    if (!verb) return;
+    const path = pathText.replace(/^["']|["']$/g, '');
+    routes.push({
+      method: verb,
+      path,
+      filePath,
+      line,
+      handler: '',
+      auth: false,
+      framework,
+    });
+  }
+
+  // Axum: .route("/path", post(handler))
+  const axumCaptures = await runQuery(language, tree, AXUM_ROUTE_QUERY);
+  for (let i = 0; i < axumCaptures.length; i++) {
+    const cap = axumCaptures[i];
+    if (cap.name !== 'method_name' || cap.text !== 'route') continue;
+    const pathCap = axumCaptures.find((c, j) => j > i && c.name === 'route_path');
+    const verbCap = axumCaptures.find((c, j) => j > i && c.name === 'http_verb');
+    if (pathCap && verbCap) pushRoute(verbCap.text, pathCap.text, cap.startRow + 1, 'axum');
+  }
+
+  // Axum qualified: .route("/path", routing::post(handler))
+  const axumQualCaptures = await runQuery(language, tree, AXUM_QUALIFIED_ROUTE_QUERY);
+  for (let i = 0; i < axumQualCaptures.length; i++) {
+    const cap = axumQualCaptures[i];
+    if (cap.name !== 'method_name' || cap.text !== 'route') continue;
+    const pathCap = axumQualCaptures.find((c, j) => j > i && c.name === 'route_path');
+    const verbCap = axumQualCaptures.find((c, j) => j > i && c.name === 'http_verb');
+    if (pathCap && verbCap) pushRoute(verbCap.text, pathCap.text, cap.startRow + 1, 'axum');
+  }
+
+  // Actix: #[get("/path")] on a fn
+  const actixCaptures = await runQuery(language, tree, ACTIX_ROUTE_QUERY);
+  for (let i = 0; i < actixCaptures.length; i++) {
+    const cap = actixCaptures[i];
+    if (cap.name !== 'http_verb') continue;
+    const pathCap = actixCaptures.find((c, j) => j > i && c.name === 'route_path');
+    if (pathCap) pushRoute(cap.text, pathCap.text, cap.startRow + 1, 'actix');
+  }
+
+  return routes;
 }
 
 export function parseRustStructFields(fieldsText: string): TypeField[] {

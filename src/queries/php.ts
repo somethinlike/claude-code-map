@@ -45,14 +45,26 @@ const METHOD_QUERY = `
       parameters: (formal_parameters) @method_params)))
 `;
 
-// Laravel routes: Route::get('/path', ...)
+// Laravel routes: Route::get('/path', handler)
+// Notes:
+//   - Route::get is a scoped_call_expression (Class::method), NOT a
+//     member_call_expression ($obj->method).
+//   - Single-quoted PHP strings parse as `string`, double-quoted as
+//     `encapsed_string` (because they support interpolation). Real
+//     Laravel code uses single quotes; we accept both via alternation.
+//   - The first argument is the path; we anchor with `.` to avoid
+//     also capturing the handler argument as a route_path.
 const LARAVEL_ROUTE_QUERY = `
-(expression_statement
-  (member_call_expression
-    object: (name) @route_obj
-    name: (name) @http_method
-    arguments: (arguments
-      (string) @route_path)))
+(scoped_call_expression
+  scope: (name) @route_class
+  name: (name) @http_method
+  arguments: (arguments
+    .
+    (argument
+      [
+        (encapsed_string (string_content) @route_path)
+        (string (string_content) @route_path)
+      ])))
 `;
 
 export async function extractPhpExports(
@@ -215,19 +227,19 @@ export async function extractPhpRoutes(
 ): Promise<ExtractedRoute[]> {
   const routes: ExtractedRoute[] = [];
 
-  // Laravel routes: Route::get('/path', ...)
+  // Laravel routes: Route::get('/path', handler)
   const laravelCaptures = await runQuery(language, tree, LARAVEL_ROUTE_QUERY);
   const httpMethods = new Set(['get', 'post', 'put', 'patch', 'delete', 'any', 'match']);
 
   for (let i = 0; i < laravelCaptures.length; i++) {
     const cap = laravelCaptures[i];
-    if (cap.name === 'route_obj' && cap.text === 'Route') {
+    if (cap.name === 'route_class' && cap.text === 'Route') {
       const methodCap = laravelCaptures[i + 1];
       const pathCap = laravelCaptures[i + 2];
       if (methodCap?.name === 'http_method' && httpMethods.has(methodCap.text) && pathCap?.name === 'route_path') {
         routes.push({
           method: methodCap.text === 'any' ? 'ALL' : methodCap.text.toUpperCase(),
-          path: pathCap.text.replace(/['"]/g, ''),
+          path: pathCap.text,
           filePath,
           line: cap.startRow + 1,
           handler: '',
