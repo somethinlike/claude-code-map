@@ -406,3 +406,35 @@ This bug had been hiding in the codebase since V2.0 shipped (the import graph fe
 - 5 new tests (+ V2.1.3's 2)
 - Test count: 261 → 268
 - This is the biggest single-commit gain in the project's history
+
+## 2026-04-10 — V2.1.5: Resolver Memoization + Bitwarden Verification
+
+V2.1.4 made the resolver run on every import (no longer skipping pre-external ones). At small scale (~100 files) this is free. At bitwarden scale (4423 files × ~10 imports = ~44k resolver calls) it's ~200M operations and was trending toward 15+ minute scans.
+
+V2.1.5 adds Map-based memoization keyed by `(language|importingDir|specifier)`. Same namespace appearing in thousands of files (bitwarden has `using Bit.Core;` in 2670 files) is now resolved once and reused.
+
+Also: SQLAlchemy field types like `db.String(100)` (Flask-SQLAlchemy convention) now match correctly. The original regex `/^\s*([A-Z]\w*)/` only matched bare types; now matches `/^\s*(?:\w+\.)?([A-Z]\w*)/` to capture qualified forms.
+
+### Bitwarden verification (the smoking gun)
+
+Re-ran bitwarden-server (4423 files) with V2.1.5:
+
+| Metric | V2.1.0 | V2.1.4 (no memo) | **V2.1.5 (memo)** |
+|---|---|---|---|
+| Internal edges | 4 | (timed out) | **15,689** |
+| Connected files | 5 | (timed out) | **3,820** (86%) |
+| Routes | 726 | 726 | 726 |
+| Types | 552 | 552 | 552 |
+| Time | 9 min | 15+ min | 11 min |
+| Audit findings | 5947 | (n/a) | 4683 (down 1264 — fewer dead-file FPs) |
+
+The graph went from "completely broken" (4 edges across 4423 files) to "86% connectivity" (3820 of 4423 files connected). This is what the resolver bug fix was supposed to do; this is the validation at scale.
+
+Time is still 11 minutes for the first scan — bitwarden's bottleneck is per-file tree-sitter parsing (~120ms per .cs file × 4423 files ≈ 9 minutes minimum), not the resolver. Cached re-runs are sub-second. Profiling parser overhead is filed as future work.
+
+### V2.1.5 release summary
+- Resolver memoization (Map cache by language|dir|specifier)
+- SQLAlchemy qualified field types (`db.String` etc.) now extract correctly
+- Bitwarden verified: 4 → 15,689 internal edges
+- Test count unchanged: 268
+- This commit closes the V2.1.4 perf concern and ships the bitwarden verification.
