@@ -364,11 +364,26 @@ async function main(): Promise<void> {
   // we flip isExternal to false. Skipping pre-external imports here is
   // wrong for those languages and was the cause of bitwarden showing
   // only 4 internal edges across 4423 files in V2.1.0–V2.1.3.
+  //
+  // Memoization: at scale (bitwarden = 4423 files × ~10 imports each =
+  // ~44k resolver calls) the same namespace string appears thousands of
+  // times. Cache resolver results keyed by (specifier|importingDir|language)
+  // so each unique tuple is resolved once. importingDir matters because
+  // relative imports resolve differently from each file.
   const projectFileSet = new Set(files.map((f) => f.relativePath));
+  const resolverCache = new Map<string, string | null>();
   for (const [filePath, parsed] of Object.entries(parsedFiles)) {
+    const importingDir = filePath.replace(/[^/]+$/, ''); // strip filename
     const resolvedImports = parsed.imports.map((imp) => {
       if (imp.resolvedPath) return imp;
-      const resolved = resolveImport(imp.source, filePath, projectFileSet, imp.language);
+      // Cache key: relative imports are dir-sensitive; bare specifiers
+      // (namespace paths) are not. We always include the dir for safety.
+      const key = `${imp.language}|${importingDir}|${imp.source}`;
+      let resolved = resolverCache.get(key);
+      if (resolved === undefined) {
+        resolved = resolveImport(imp.source, filePath, projectFileSet, imp.language);
+        resolverCache.set(key, resolved);
+      }
       return resolved ? { ...imp, resolvedPath: resolved, isExternal: false } : imp;
     });
     parsedFiles[filePath] = { ...parsed, imports: resolvedImports };

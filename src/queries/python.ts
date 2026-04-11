@@ -374,8 +374,10 @@ export function parseSqlalchemyModelFields(bodyText: string): SchemaField[] {
     if (name === '__tablename__' || name.startsWith('__')) continue;
 
     // Field type is the first positional argument to Column/mapped_column.
-    // Could be `Integer`, `String(100)`, `String`, `ForeignKey("users.id")`, etc.
-    const typeMatch = args.match(/^\s*([A-Z]\w*)/);
+    // Could be `Integer`, `String(100)`, `ForeignKey("users.id")`, or
+    // a qualified form like `db.String(100)` (Flask-SQLAlchemy convention).
+    // Match either bare `Type` or `module.Type`.
+    const typeMatch = args.match(/^\s*(?:\w+\.)?([A-Z]\w*)/);
     const fieldType = typeMatch?.[1] ?? 'unknown';
 
     const isPK = /primary_key\s*=\s*True/.test(args);
