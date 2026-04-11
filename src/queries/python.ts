@@ -65,6 +65,20 @@ const DJANGO_MODEL_QUERY = `
   body: (block) @model_body)
 `;
 
+// SQLAlchemy models: class Foo(Base): ... where Base is a declarative
+// base class. Can't statically prove Base is from SQLAlchemy without
+// resolving imports, so we use a body-content heuristic instead — if
+// the class body contains `Column(` or `mapped_column(`, treat it as
+// a SQLAlchemy model. This catches both classical (`Column`) and
+// modern (`mapped_column` / `Mapped[]`) declarative styles.
+const SQLALCHEMY_MODEL_QUERY = `
+(class_definition
+  name: (identifier) @model_name
+  superclasses: (argument_list
+    (identifier) @sup)
+  body: (block) @model_body)
+`;
+
 export async function extractPyExports(
   tree: any,
   language: SupportedLanguage,
@@ -237,23 +251,28 @@ export async function extractPyModels(
 ): Promise<ExtractedModel[]> {
   const models: ExtractedModel[] = [];
 
-  // Skip files that aren't likely to contain Django models. Most Django
-  // projects keep models in models.py (or split them into a models/ directory).
-  // The cheap path-check avoids running the query on every Python file.
-  if (!filePath.endsWith('models.py') && !filePath.includes('/models/')) {
+  // Skip files that aren't likely to contain ORM models. Most projects
+  // keep them in models.py / a models/ directory / a db/ directory.
+  // The cheap path-check avoids running queries on every Python file.
+  if (
+    !filePath.endsWith('models.py') &&
+    !filePath.includes('/models/') &&
+    !filePath.includes('/db/')
+  ) {
     return models;
   }
 
-  const captures = await runQuery(language, tree, DJANGO_MODEL_QUERY);
-  for (let i = 0; i < captures.length; i++) {
-    const cap = captures[i];
+  // Django: class Foo(models.Model)
+  const djangoCaptures = await runQuery(language, tree, DJANGO_MODEL_QUERY);
+  for (let i = 0; i < djangoCaptures.length; i++) {
+    const cap = djangoCaptures[i];
     if (cap.name !== 'model_name') continue;
 
-    const supObj = captures.find((c, j) => j > i && c.name === 'sup_obj');
-    const supAttr = captures.find((c, j) => j > i && c.name === 'sup_attr');
+    const supObj = djangoCaptures.find((c, j) => j > i && c.name === 'sup_obj');
+    const supAttr = djangoCaptures.find((c, j) => j > i && c.name === 'sup_attr');
     if (supObj?.text !== 'models' || supAttr?.text !== 'Model') continue;
 
-    const bodyCap = captures.find((c, j) => j > i && c.name === 'model_body');
+    const bodyCap = djangoCaptures.find((c, j) => j > i && c.name === 'model_body');
     const fields = bodyCap ? parseDjangoModelFields(bodyCap.text) : [];
 
     models.push({
@@ -261,6 +280,29 @@ export async function extractPyModels(
       fields,
       filePath,
       orm: 'django',
+    });
+  }
+
+  // SQLAlchemy: class Foo(Base) with Column(...) or mapped_column(...) fields
+  const sqlaCaptures = await runQuery(language, tree, SQLALCHEMY_MODEL_QUERY);
+  for (let i = 0; i < sqlaCaptures.length; i++) {
+    const cap = sqlaCaptures[i];
+    if (cap.name !== 'model_name') continue;
+
+    // Skip if we already extracted this name as a Django model
+    if (models.some((m) => m.name === cap.text)) continue;
+
+    const bodyCap = sqlaCaptures.find((c, j) => j > i && c.name === 'model_body');
+    if (!bodyCap) continue;
+    // Body content heuristic: must contain a Column-style field declaration
+    if (!/\b(?:Column|mapped_column)\s*\(/.test(bodyCap.text)) continue;
+
+    const fields = parseSqlalchemyModelFields(bodyCap.text);
+    models.push({
+      name: cap.text,
+      fields,
+      filePath,
+      orm: 'sqlalchemy',
     });
   }
 
@@ -287,6 +329,59 @@ export function parseDjangoModelFields(bodyText: string): SchemaField[] {
     const isPK = /primary_key\s*=\s*True/.test(args);
     const isUnique = /unique\s*=\s*True/.test(args);
     const required = !/null\s*=\s*True/.test(args) && !/blank\s*=\s*True/.test(args);
+
+    const attributes: string[] = [];
+    if (isPK) attributes.push('PK');
+    if (isUnique) attributes.push('UQ');
+    if (isRelation) attributes.push('FK');
+
+    fields.push({
+      name,
+      type: fieldType,
+      required,
+      isRelation,
+      attributes,
+    });
+  }
+
+  return fields;
+}
+
+/**
+ * Parse the body of a SQLAlchemy model class to extract field declarations.
+ * Handles both classical (`name = Column(String, ...)`) and modern declarative
+ * (`name: Mapped[str] = mapped_column(String, ...)`) styles.
+ */
+export function parseSqlalchemyModelFields(bodyText: string): SchemaField[] {
+  const fields: SchemaField[] = [];
+  const lines = bodyText.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Classical: `name = Column(Type, ...)`
+    // Modern:    `name: Mapped[Type] = mapped_column(Type, ...)`
+    // The args portion captures everything after the open paren — we
+    // can't use `[^)]*` because field types may themselves contain
+    // parens (e.g., `String(255)`). Instead grab to end-of-line; the
+    // line-based loop already gives us a single declaration per match.
+    const classicMatch = trimmed.match(/^(\w+)\s*=\s*Column\s*\((.*)$/);
+    const modernMatch = trimmed.match(/^(\w+)\s*:\s*Mapped\[[^\]]+\]\s*=\s*mapped_column\s*\((.*)$/);
+    const match = classicMatch ?? modernMatch;
+    if (!match) continue;
+
+    const [, name, args = ''] = match;
+    if (ORM_AUDIT_COLUMNS.has(name)) continue;
+    if (name === '__tablename__' || name.startsWith('__')) continue;
+
+    // Field type is the first positional argument to Column/mapped_column.
+    // Could be `Integer`, `String(100)`, `String`, `ForeignKey("users.id")`, etc.
+    const typeMatch = args.match(/^\s*([A-Z]\w*)/);
+    const fieldType = typeMatch?.[1] ?? 'unknown';
+
+    const isPK = /primary_key\s*=\s*True/.test(args);
+    const isUnique = /unique\s*=\s*True/.test(args);
+    const isRelation = fieldType === 'ForeignKey' || /ForeignKey\s*\(/.test(args);
+    const required = !/nullable\s*=\s*True/.test(args);
 
     const attributes: string[] = [];
     if (isPK) attributes.push('PK');

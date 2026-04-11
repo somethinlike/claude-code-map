@@ -356,11 +356,18 @@ async function main(): Promise<void> {
     }
   }
 
-  // Step 5b: Resolve imports against project file set
+  // Step 5b: Resolve imports against project file set.
+  // Many language extractors pre-mark namespace imports as `isExternal: true`
+  // because the source string alone (e.g. `System.IO`, `Bit.Core.Entities`)
+  // doesn't tell you whether it's a stdlib package or a project namespace.
+  // The resolver figures it out — if it returns a project-relative path,
+  // we flip isExternal to false. Skipping pre-external imports here is
+  // wrong for those languages and was the cause of bitwarden showing
+  // only 4 internal edges across 4423 files in V2.1.0–V2.1.3.
   const projectFileSet = new Set(files.map((f) => f.relativePath));
   for (const [filePath, parsed] of Object.entries(parsedFiles)) {
     const resolvedImports = parsed.imports.map((imp) => {
-      if (imp.isExternal || imp.resolvedPath) return imp;
+      if (imp.resolvedPath) return imp;
       const resolved = resolveImport(imp.source, filePath, projectFileSet, imp.language);
       return resolved ? { ...imp, resolvedPath: resolved, isExternal: false } : imp;
     });

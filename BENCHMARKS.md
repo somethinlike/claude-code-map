@@ -349,3 +349,60 @@ These are deferred to V2.2+. The core 17-route flat extraction is the foundation
 - 7 new tests
 - Test count: 254 → 261
 - ruby-rails went from 0 → 17 routes (100% of flat resources)
+
+## 2026-04-10 — V2.1.3: Rust Axum Chained Verbs
+
+`.route("/foo", get(h).put(h))` only caught the inner verb in V2.1.0–V2.1.2. The `function: (identifier) @http_verb` query required a flat call_expression, but chained calls have `function: (field_expression ...)` instead.
+
+Replaced the strict query with a permissive one that captures the entire second argument as a node, then post-processes its `.text` with a regex `\b(get|post|put|patch|delete|head|options|any)\s*\(` to find every HTTP verb. Handles arbitrary chain depth and the qualified `routing::post(h)` form uniformly.
+
+**Coverage:** rust-axum 6 → 19 routes. **Tests:** 261 → 263.
+
+## 2026-04-10 — V2.1.4: The Pre-External Resolver Bug (HUGE wins)
+
+While verifying the V2.1.1 C# resolver fix against bitwarden, the bitwarden codemap STILL showed only 4 internal edges from 4423 files. The C# resolver was correct in isolation (verified by unit tests + a debug script). So why was the graph empty?
+
+**The bug**: 6 of 9 language extractors (`csharp.ts`, `go.ts`, `java.ts`, `kotlin.ts`, `php.ts`, plus partial in `rust.ts`) pre-marked all namespace imports as `isExternal: true` because the source string alone (`System.IO`, `Bit.Core.Entities`) doesn't tell you whether it's a stdlib package or a project namespace. The comment said "resolver determines locality later" — but the resolver loop in `cli.ts` had this check:
+
+```ts
+if (imp.isExternal || imp.resolvedPath) return imp;
+```
+
+That early-return SKIPPED any pre-external import. So for all 6 languages, the resolver never even ran. The graph for Java, Kotlin, C#, PHP, and partial-Go showed essentially zero internal edges from V2.0.0 onward.
+
+**The fix**: drop the `imp.isExternal` early-exit. Let the resolver run on every import that doesn't already have `resolvedPath`. If the resolver returns a project-relative path, flip `isExternal` to false. If not, leave it as-is.
+
+**Coverage gains** (Tier 1 internal edges):
+
+| Repo | Before V2.1.4 | After V2.1.4 |
+|---|---|---|
+| ts-express | 39 | 39 (unchanged — TS already worked) |
+| py-django | 19 | **31** |
+| py-flask | 9 | **44** |
+| go-gin | 0 | **18** |
+| rust-actix | 32 | 32 (unchanged — uses local detection) |
+| rust-axum | 1 | 1 (unchanged) |
+| java-spring | **0** | **346** ⭐⭐⭐ |
+| kotlin-spring | **0** | **71** ⭐⭐ |
+| csharp-aspnet | **0** | **88** ⭐⭐ |
+| php-laravel | 1 | **61** ⭐ |
+
+Java spring went from 0 → 346 internal edges. Kotlin 0 → 71. C# 0 → 88. PHP 1 → 61. Five languages had effectively zero import graph data; all are now functional.
+
+This bug had been hiding in the codebase since V2.0 shipped (the import graph feature). Tier 2 found it because bitwarden's scale made the absence obvious — a smaller benchmark might have shrugged off "0 edges from 100 files" as plausible. Bitwarden's "4 edges from 4423 files" was the smoking gun.
+
+**Lesson**: when an extractor sets a flag like `isExternal: true` while saying "the resolver figures it out later," verify that the resolver actually consults the resolver path. Comments lie; code doesn't.
+
+### Also in V2.1.4
+
+- **SQLAlchemy model extraction.** Extends `extractPyModels` to also detect SQLAlchemy models via a body-content heuristic — any class containing `Column(` or `mapped_column(` field assignments. Handles both classical (`Column(Integer, primary_key=True)`) and modern declarative (`id: Mapped[int] = mapped_column(...)`) styles. PK / UQ / FK attribute detection. Uses the `__tablename__` skip plus dunder filtering. 5 new tests.
+- **Path filter relaxed**: `extractPyModels` now also runs on files in `db/` directories (in addition to `models.py` and `models/`).
+
+**Tests:** 263 → 268 (+5 SQLAlchemy).
+
+### V2.1.4 release summary
+- The pre-external resolver bug fixed — 5 languages went from 0 → hundreds of internal edges
+- SQLAlchemy model extraction added (Django pattern reused with body-content heuristic)
+- 5 new tests (+ V2.1.3's 2)
+- Test count: 261 → 268
+- This is the biggest single-commit gain in the project's history

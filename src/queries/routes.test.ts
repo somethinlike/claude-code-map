@@ -479,6 +479,89 @@ class RealModel(models.Model):
   });
 });
 
+describe('extractPyModels — SQLAlchemy (V2.1.4 new feature)', () => {
+  it('extracts classical Column-style fields', async () => {
+    const src = `
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    email = Column(String(255), unique=True)
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    expect(models).toHaveLength(1);
+    expect(models[0].name).toBe('User');
+    expect(models[0].orm).toBe('sqlalchemy');
+    const fieldNames = models[0].fields.map((f) => f.name);
+    expect(fieldNames).toEqual(['id', 'name', 'email']);
+    expect(models[0].fields.find((f) => f.name === 'id')?.attributes).toContain('PK');
+    expect(models[0].fields.find((f) => f.name === 'email')?.attributes).toContain('UQ');
+    expect(models[0].fields.find((f) => f.name === 'name')?.required).toBe(true);
+  });
+
+  it('extracts modern declarative mapped_column fields', async () => {
+    const src = `
+class Item(Base):
+    __tablename__ = "items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    expect(models).toHaveLength(1);
+    expect(models[0].name).toBe('Item');
+    expect(models[0].orm).toBe('sqlalchemy');
+    const fields = models[0].fields;
+    expect(fields).toHaveLength(3);
+    expect(fields.find((f) => f.name === 'id')?.attributes).toContain('PK');
+    expect(fields.find((f) => f.name === 'user_id')?.attributes).toContain('FK');
+  });
+
+  it('skips __tablename__ and other dunder attributes', async () => {
+    const src = `
+class User(Base):
+    __tablename__ = "users"
+    __mapper_args__ = {"eager_defaults": True}
+    id = Column(Integer, primary_key=True)
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    const fieldNames = models[0].fields.map((f) => f.name);
+    expect(fieldNames).toEqual(['id']);
+  });
+
+  it('does not match classes without Column/mapped_column fields (heuristic)', async () => {
+    const src = `
+class NotAModel(Base):
+    foo = "bar"
+    def method(self):
+        pass
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    expect(models).toHaveLength(0);
+  });
+
+  it('extracts both Django and SQLAlchemy models in the same file', async () => {
+    const src = `
+class DjangoThing(models.Model):
+    name = models.CharField(max_length=100)
+
+class SqlaThing(Base):
+    __tablename__ = "sqla_things"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100))
+    `;
+    const tree = await parseSource(src, 'python');
+    const models = await extractPyModels(tree, 'python', 'app/models.py');
+    expect(models).toHaveLength(2);
+    expect(models.find((m) => m.name === 'DjangoThing')?.orm).toBe('django');
+    expect(models.find((m) => m.name === 'SqlaThing')?.orm).toBe('sqlalchemy');
+  });
+});
+
 // --- Ruby / Rails routes ---
 
 describe('extractRubyRoutes — Rails resources DSL (V2.1.1 new feature)', () => {
