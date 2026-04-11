@@ -42,30 +42,18 @@ const TRAIT_QUERY = `
   name: (type_identifier) @trait_name)
 `;
 
-// Axum routes: .route("/path", post(handler)) chained on Router::new().
-// Captures the simple form where the second argument is a single function
-// call like `post(handler)`. Chained methods (`get(h).put(h)`) only catch
-// the inner verb — the outer .put() is currently a known gap.
+// Axum routes: .route("/path", verb(handler)) chained on Router::new().
+// Captures the .route call and its second argument as a single node — we
+// then post-process the argument text to extract every HTTP verb name in
+// it (handles simple form `post(h)`, chained form `get(h).put(h)`, and
+// qualified form `routing::post(h)` uniformly).
 const AXUM_ROUTE_QUERY = `
 (call_expression
   function: (field_expression
     field: (field_identifier) @method_name)
   arguments: (arguments
     (string_literal) @route_path
-    (call_expression
-      function: (identifier) @http_verb)))
-`;
-
-// Axum routes with qualified verb: .route("/path", routing::post(handler))
-const AXUM_QUALIFIED_ROUTE_QUERY = `
-(call_expression
-  function: (field_expression
-    field: (field_identifier) @method_name)
-  arguments: (arguments
-    (string_literal) @route_path
-    (call_expression
-      function: (scoped_identifier
-        name: (identifier) @http_verb))))
+    (call_expression) @verb_arg))
 `;
 
 // Actix attribute macros: #[get("/path")], #[post("/path")] on a function
@@ -210,24 +198,30 @@ export async function extractRustRoutes(
     });
   }
 
-  // Axum: .route("/path", post(handler))
+  // Axum: .route("/path", verb(h)) and chained .route("/path", get(h).put(h))
+  // The verb_arg capture is the entire second argument as a node — we
+  // regex-extract every HTTP verb identifier from its text. This handles
+  // simple, chained, and qualified-path forms uniformly.
+  const verbWordRe = /\b(get|post|put|patch|delete|head|options|any)\s*\(/g;
   const axumCaptures = await runQuery(language, tree, AXUM_ROUTE_QUERY);
   for (let i = 0; i < axumCaptures.length; i++) {
     const cap = axumCaptures[i];
     if (cap.name !== 'method_name' || cap.text !== 'route') continue;
     const pathCap = axumCaptures.find((c, j) => j > i && c.name === 'route_path');
-    const verbCap = axumCaptures.find((c, j) => j > i && c.name === 'http_verb');
-    if (pathCap && verbCap) pushRoute(verbCap.text, pathCap.text, cap.startRow + 1, 'axum');
-  }
+    const verbCap = axumCaptures.find((c, j) => j > i && c.name === 'verb_arg');
+    if (!pathCap || !verbCap) continue;
 
-  // Axum qualified: .route("/path", routing::post(handler))
-  const axumQualCaptures = await runQuery(language, tree, AXUM_QUALIFIED_ROUTE_QUERY);
-  for (let i = 0; i < axumQualCaptures.length; i++) {
-    const cap = axumQualCaptures[i];
-    if (cap.name !== 'method_name' || cap.text !== 'route') continue;
-    const pathCap = axumQualCaptures.find((c, j) => j > i && c.name === 'route_path');
-    const verbCap = axumQualCaptures.find((c, j) => j > i && c.name === 'http_verb');
-    if (pathCap && verbCap) pushRoute(verbCap.text, pathCap.text, cap.startRow + 1, 'axum');
+    // Extract every verb token from the argument text. `route_layer(...)`
+    // and similar non-verb wrappers are filtered by the verb whitelist.
+    const seenVerbs = new Set<string>();
+    let m: RegExpExecArray | null;
+    verbWordRe.lastIndex = 0;
+    while ((m = verbWordRe.exec(verbCap.text))) {
+      const verb = m[1].toLowerCase();
+      if (seenVerbs.has(verb)) continue;
+      seenVerbs.add(verb);
+      pushRoute(verb, pathCap.text, cap.startRow + 1, 'axum');
+    }
   }
 
   // Actix: #[get("/path")] on a fn

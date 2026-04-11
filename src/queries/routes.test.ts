@@ -142,6 +142,36 @@ fn router() -> Router {
     expect(routes).toHaveLength(2);
     expect(routes[0].framework).toBe('axum');
   });
+
+  it('extracts chained verbs (V2.1.3 fix)', async () => {
+    // The original V2.1.0 axum extractor only caught the inner verb of
+    // a chained call. V2.1.3 captures all verbs at any chain depth via
+    // regex post-processing of the second argument's text.
+    const src = `
+fn router() -> Router {
+    Router::new()
+        .route("/api/user", get(get_user).put(update_user).delete(delete_user))
+}
+    `;
+    const tree = await parseSource(src, 'rust');
+    const routes = await extractRustRoutes(tree, 'rust', 'src/api.rs');
+    const methods = routes.map((r) => r.method).sort();
+    expect(methods).toEqual(['DELETE', 'GET', 'PUT']);
+    expect(routes.every((r) => r.path === '/api/user')).toBe(true);
+  });
+
+  it('extracts qualified verbs (axum::routing::post form)', async () => {
+    const src = `
+fn router() -> Router {
+    Router::new()
+        .route("/api/data", routing::post(create))
+}
+    `;
+    const tree = await parseSource(src, 'rust');
+    const routes = await extractRustRoutes(tree, 'rust', 'src/api.rs');
+    expect(routes).toHaveLength(1);
+    expect(routes[0].method).toBe('POST');
+  });
 });
 
 describe('extractRustRoutes — Actix', () => {
