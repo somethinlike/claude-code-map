@@ -153,24 +153,47 @@ export async function extractGoRoutes(
     'get', 'post', 'put', 'patch', 'delete', 'head', 'options',
     'handlefunc', 'handle', 'any',
   ]);
+
+  // Reduce false positives: only treat the call as a route if the
+  // receiver (operand) looks like a router. db.Get(id), cache.Set(k, v),
+  // and similar non-route method calls otherwise pass the HTTP method
+  // name filter and pollute the route count.
+  const ROUTER_OBJ_NAMES = new Set([
+    'router', 'r', 'app', 'mux', 'srv', 'server', 'api', 'group',
+    'gin', 'engine', 'route', 'routes', 'rg', 'rt',
+  ]);
+  // Path must look path-shaped (starts with / or is empty for HandleFunc).
+  // Filters out e.g. db.Get("user-by-email") which has a non-path string.
+  const looksLikePath = (p: string) => p === '' || p.startsWith('/') || p.includes('/:');
+
   const routes: ExtractedRoute[] = [];
 
   const captures = await runQuery(language, tree, HTTP_ROUTE_QUERY);
   for (let i = 0; i < captures.length; i++) {
     const cap = captures[i];
-    if (cap.name !== 'http_method') continue;
-    const lower = cap.text.toLowerCase();
+    if (cap.name !== 'router_obj') continue;
+    const objName = cap.text.toLowerCase();
+    const isKnownRouter = ROUTER_OBJ_NAMES.has(objName);
+
+    const methodCap = captures[i + 1];
+    if (!methodCap || methodCap.name !== 'http_method') continue;
+    const lower = methodCap.text.toLowerCase();
     if (!HTTP_METHOD_NAMES.has(lower)) continue;
 
     const pathCap = captures.find((c, j) => j > i && c.name === 'route_path');
     if (!pathCap) continue;
+    const rawPath = pathCap.text.replace(/"/g, '');
+
+    // If the receiver isn't a known router name, require path-shaped string.
+    // Known routers can have empty paths (e.g., gin's RouterGroup methods).
+    if (!isKnownRouter && !looksLikePath(rawPath)) continue;
 
     const method = lower === 'handlefunc' || lower === 'handle' || lower === 'any'
       ? 'ALL'
       : lower.toUpperCase();
     routes.push({
       method,
-      path: pathCap.text.replace(/"/g, ''),
+      path: rawPath,
       filePath,
       line: cap.startRow + 1,
       handler: '',
